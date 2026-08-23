@@ -68,6 +68,15 @@ export const realtimeRoutes: FastifyPluginAsync = async (app) => {
           socket.send(JSON.stringify(envelope("ride.subscribed", { rideId })));
           return;
         }
+        if (message.event === "driver.subscribe") {
+          if (identity.role !== "driver") {
+            socket.send(JSON.stringify(envelope("error", { code: "FORBIDDEN" })));
+            return;
+          }
+          app.realtime.subscribeUser(identity.id, socket);
+          socket.send(JSON.stringify(envelope("driver.subscribed", { userId: identity.id })));
+          return;
+        }
         socket.send(
           JSON.stringify(envelope("error", { code: "UNKNOWN_EVENT" })),
         );

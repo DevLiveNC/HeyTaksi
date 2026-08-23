@@ -1,7 +1,10 @@
+import { driverAvailabilityTargetSchema } from '@heytaksi/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsync } from 'fastify';
 import { validate } from '../../core/http/validation.js';
 import { AppError } from '../../core/errors/app-error.js';
+import { DriverService, earningsPeriods, type EarningsPeriod } from './driver.service.js';
+import { RideService } from '../rides/ride.service.js';
 
 const vehicleSchema = z.object({
   plate: z.string().trim().min(5).max(20).transform((value) => value.replace(/\s/g, '').toUpperCase()),
@@ -9,41 +12,67 @@ const vehicleSchema = z.object({
   year: z.number().int().min(1980).max(new Date().getFullYear() + 1), color: z.string().trim().min(2).max(40),
   vehicleType: z.enum(['standard', 'comfort', 'xl', 'accessible']),
 });
-const onlineSchema = z.object({ online: z.boolean() });
+const availabilitySchema = z.object({ availability: driverAvailabilityTargetSchema });
+const locationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  heading: z.number().min(0).max(360).optional(),
+  accuracyMeters: z.number().min(0).max(1000).optional(),
+  speedMps: z.number().min(0).max(90).optional(),
+});
 const documentSchema = z.object({
   documentType: z.enum(['driver_license', 'identity', 'criminal_record', 'vehicle_registration', 'insurance']),
   documentUrl: z.url(), expiryDate: z.iso.date().nullable().optional(),
 });
+const earningsQuery = z.object({ period: z.enum(['day', 'week', 'month']).default('day') });
 
 export const driverRoutes: FastifyPluginAsync = async (app) => {
   const driverGuard = app.requireRoles('driver');
+  const drivers = new DriverService(app);
+  const rides = new RideService(app);
   app.get('/me', { preHandler: driverGuard }, async (request) => {
     const result = await app.db.query(
       `SELECT d.id,d.driver_status AS "driverStatus",d.rating,d.total_rides AS "totalRides",
        d.acceptance_rate AS "acceptanceRate",d.cancellation_rate AS "cancellationRate",
-       d.online_status AS "onlineStatus",d.verification_status AS "verificationStatus"
+       d.online_status AS "onlineStatus",d.verification_status AS "verificationStatus",d.availability
        FROM drivers d WHERE d.user_id=$1`, [request.user.id],
     );
     if (!result.rows[0]) throw new AppError(404, 'DRIVER_NOT_FOUND', 'Sürücü profili bulunamadı.');
     return { success: true, data: result.rows[0] };
   });
+  app.get('/me/dashboard', { preHandler: driverGuard }, async (request) => ({
+    success: true,
+    data: await drivers.dashboard(request.user.id),
+  }));
+  app.patch('/me/availability', { preHandler: driverGuard }, async (request) => {
+    const input = validate(availabilitySchema, request.body);
+    return { success: true, data: await drivers.setAvailability(request.user.id, input.availability) };
+  });
+  // Faz 2 uyumluluğu: boolean çevrim içi anahtarı durum makinesine çevrilir.
   app.patch('/me/online', { preHandler: driverGuard }, async (request) => {
-    const { online } = validate(onlineSchema, request.body);
-    const result = await app.db.query(
-      `UPDATE drivers SET online_status=$2,updated_at=NOW() WHERE user_id=$1 AND verification_status='verified' AND driver_status='active' RETURNING online_status AS "onlineStatus"`,
-      [request.user.id, online],
-    );
-    if (!result.rows[0]) throw new AppError(409, 'DRIVER_NOT_VERIFIED', 'Çevrim içi olmak için sürücü doğrulaması tamamlanmalıdır.');
-    return { success: true, data: result.rows[0] };
+    const { online } = validate(z.object({ online: z.boolean() }), request.body);
+    return {
+      success: true,
+      data: await drivers.setAvailability(request.user.id, online ? 'online' : 'offline'),
+    };
   });
-  app.get('/me/rides/current', { preHandler: driverGuard }, async (request) => {
-    const result = await app.db.query(
-      `SELECT r.id,r.status,r.pickup_address AS "pickupAddress",r.destination_address AS "destinationAddress",p.estimated_fare AS "estimatedFare"
-       FROM rides r JOIN drivers d ON d.id=r.driver_id JOIN ride_pricing p ON p.ride_id=r.id
-       WHERE d.user_id=$1 AND r.status NOT IN ('completed','cancelled') ORDER BY r.created_at DESC LIMIT 1`, [request.user.id],
-    );
-    return { success: true, data: result.rows[0] ?? null };
+  app.post('/me/location', { preHandler: driverGuard }, async (request, reply) => {
+    const input = validate(locationSchema, request.body);
+    return reply.status(201).send({ success: true, data: await drivers.updateLocation(request.user.id, input) });
   });
+  app.get('/me/hotspots', { preHandler: driverGuard }, async () => ({
+    success: true,
+    data: await drivers.hotspots(),
+  }));
+  app.get('/me/earnings', { preHandler: driverGuard }, async (request) => {
+    const period = validate(earningsQuery, request.query).period as EarningsPeriod;
+    if (!earningsPeriods.includes(period)) throw new AppError(422, 'INVALID_PERIOD', 'Geçersiz kazanç dönemi.');
+    return { success: true, data: await drivers.earnings(request.user.id, period) };
+  });
+  app.get('/me/rides/current', { preHandler: driverGuard }, async (request) => ({
+    success: true,
+    data: await rides.driverActiveRide(request.user.id),
+  }));
   app.post('/me/vehicles', { preHandler: driverGuard }, async (request, reply) => {
     const input = validate(vehicleSchema, request.body);
     const result = await app.db.query(

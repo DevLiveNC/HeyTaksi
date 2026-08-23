@@ -99,7 +99,128 @@ export type RideStatus = (typeof rideStatuses)[number];
 export type CreateRideInput = z.infer<typeof createRideSchema>;
 export interface RouteEstimate { distanceMeters: number; durationSeconds: number; geometry: { type: 'LineString'; coordinates: [number, number][] }; estimatedFare?: number; }
 
-export const websocketEvents = { CONNECTION_READY: 'connection.ready', AUTH: 'auth', AUTHENTICATED: 'authenticated', RIDE_SUBSCRIBE: 'ride.subscribe', RIDE_UPDATED: 'ride.updated', PING: 'ping', PONG: 'pong', ERROR: 'error' } as const;
+export const driverAvailabilities = ['offline', 'online', 'available', 'on_trip', 'paused'] as const;
+export const driverAvailabilitySchema = z.enum(driverAvailabilities);
+export type DriverAvailability = (typeof driverAvailabilities)[number];
+
+/** Sürücünün kendisinin seçebildiği durumlar; `available` ve `on_trip` sistem tarafından yönetilir. */
+export const driverAvailabilityTargets = ['offline', 'online', 'paused'] as const;
+export const driverAvailabilityTargetSchema = z.enum(driverAvailabilityTargets);
+export type DriverAvailabilityTarget = (typeof driverAvailabilityTargets)[number];
+
+const driverAvailabilityTransitions: Record<DriverAvailability, DriverAvailabilityTarget[]> = {
+  offline: ['online'],
+  online: ['offline', 'paused'],
+  available: ['offline', 'paused'],
+  on_trip: [],
+  paused: ['offline', 'online'],
+};
+/** Sürücünün `from` durumundayken seçebileceği hedef durumlar. `on_trip` sürücüsü yalnızca yolculuğu bitirerek durum değiştirebilir. */
+export function driverAvailabilityTargetsFor(from: DriverAvailability): DriverAvailabilityTarget[] {
+  return driverAvailabilityTransitions[from];
+}
+/** Yolculuk dağıtımına açık sürücü durumları. */
+export function isDriverDispatchable(availability: DriverAvailability): boolean {
+  return availability === 'online' || availability === 'available';
+}
+
+export const driverCancelReasons = ['passenger_no_show', 'wrong_location', 'vehicle_problem', 'unsafe', 'other'] as const;
+export type DriverCancelReason = (typeof driverCancelReasons)[number];
+export const passengerCancelReasons = ['changed_mind', 'wait_too_long', 'wrong_location', 'other'] as const;
+export type PassengerCancelReason = (typeof passengerCancelReasons)[number];
+
+export interface Hotspot {
+  id: string;
+  latitude: number;
+  longitude: number;
+  address: string;
+  rideCount: number;
+  demandLevel: 'low' | 'medium' | 'high';
+}
+export interface DriverVehicleInfo {
+  id: string;
+  plate: string;
+  brand: string;
+  model: string;
+  color: string;
+  vehicleType: VehicleType;
+}
+export interface DriverDashboard {
+  availability: DriverAvailability;
+  onlineStatus: boolean;
+  verificationStatus: string;
+  driverStatus: string;
+  rating: number;
+  totalRides: number;
+  acceptanceRate: number;
+  cancellationRate: number;
+  todayEarnings: number;
+  todayTrips: number;
+  activeRideId: string | null;
+  vehicle: DriverVehicleInfo | null;
+  location: { latitude: number; longitude: number; recordedAt: string } | null;
+  hotspots: Hotspot[];
+}
+export interface DriverRideDetail {
+  id: string;
+  status: RideStatus;
+  vehicleType: VehicleType;
+  pickup: Coordinate;
+  destination: Coordinate;
+  pickupAddress: string;
+  destinationAddress: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  estimatedFare: number;
+  finalFare: number | null;
+  geometry: RouteEstimate['geometry'] | null;
+  passengerName: string | null;
+  passengerRating: number;
+  maskedPhone: string | null;
+  dialPhone: string | null;
+  assignedAt: string | null;
+  arrivedAt: string | null;
+  waitSeconds: number;
+  passengerRated: boolean;
+}
+export interface EarningsRide {
+  id: string;
+  completedAt: string;
+  pickupAddress: string;
+  destinationAddress: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  waitSeconds: number;
+  fare: number;
+  passengerName: string | null;
+  stars: number | null;
+}
+export interface DriverEarnings {
+  period: 'day' | 'week' | 'month';
+  since: string;
+  total: number;
+  tripCount: number;
+  averageFare: number;
+  bestFare: number;
+  onlineMinutes: number;
+  rides: EarningsRide[];
+}
+export interface RideMessage {
+  id: string;
+  rideId: string;
+  senderRole: 'passenger' | 'driver' | string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+}
+export interface RideContact {
+  maskedPhone: string | null;
+  dialPhone: string | null;
+  passengerName: string | null;
+  safetyNotes: string[];
+}
+
+export const websocketEvents = { CONNECTION_READY: 'connection.ready', AUTH: 'auth', AUTHENTICATED: 'authenticated', RIDE_SUBSCRIBE: 'ride.subscribe', RIDE_SUBSCRIBED: 'ride.subscribed', RIDE_UPDATED: 'ride.updated', RIDE_OFFER: 'ride.offer', RIDE_MESSAGE: 'ride.message', DRIVER_SUBSCRIBE: 'driver.subscribe', DRIVER_SUBSCRIBED: 'driver.subscribed', DRIVER_UPDATED: 'driver.updated', PING: 'ping', PONG: 'pong', ERROR: 'error' } as const;
 export interface RealtimeEnvelope<T = unknown> {
   event: (typeof websocketEvents)[keyof typeof websocketEvents] | string;
   data: T;

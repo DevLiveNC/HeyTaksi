@@ -16,6 +16,7 @@ import type { RideStatus } from "@heytaksi/shared";
 import { useBooking, type ActiveRide } from "./BookingContext";
 import { InteractiveMap } from "./InteractiveMap";
 import { rideApi } from "../../services/rideApi";
+import { wsBaseUrl } from "../../services/config";
 const copy: Record<RideStatus, { title: string; caption: string }> = {
   searching: {
     title: "Taksin aranıyor",
@@ -85,7 +86,7 @@ export function ActiveRidePage() {
   useEffect(() => {
     if (!auth.accessToken) return;
     const socket = new WebSocket(
-      import.meta.env.VITE_WS_URL ?? "ws://localhost:3000/ws",
+      wsBaseUrl,
     );
     socket.onopen = () =>
       socket.send(

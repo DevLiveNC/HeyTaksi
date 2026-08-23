@@ -9,7 +9,7 @@ Monorepo Vercel'de dört ayrı Project olarak bağlanır. Her Project aynı Git 
 | heytaksi-driver | `apps/driver` | Sürücü web uygulaması |
 | heytaksi-admin | `apps/admin` | Yönetim paneli |
 
-Her dizindeki `vercel.json` build ve SPA rewrite ayarlarını içerir. Frontend Project'lerine `VITE_API_URL=https://<api-domain>/api/v1` eklenir. API Project'ine `.env.example` içindeki server değişkenleri Vercel Environment Variables üzerinden eklenir.
+Her dizindeki `vercel.json` build ve SPA rewrite ayarlarını içerir. Frontend Project'lerine `VITE_API_URL=https://<api-domain>/api/v1`, `VITE_WS_URL=wss://<realtime-domain>/ws` ve `VITE_MAP_STYLE_URL=https://<map-provider>/style` eklenir. API Project'ine `.env.example` içindeki server değişkenleri Vercel Environment Variables üzerinden eklenir.
 
 ## Neon PostgreSQL
 

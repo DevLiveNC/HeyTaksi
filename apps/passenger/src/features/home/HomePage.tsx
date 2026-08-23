@@ -9,8 +9,9 @@ import {
   Star,
   UserRound,
 } from "lucide-react";
+import { lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { MapCanvas } from "./MapCanvas";
+const MapCanvas = lazy(() => import("./MapCanvas").then((module) => ({ default: module.MapCanvas })));
 import {
   usePassengerExperience,
   type Address,
@@ -34,7 +35,7 @@ export function HomePage() {
         <span>Mevcut konum</span>
         <strong>{state.currentLocation}</strong>
       </div>
-      <MapCanvas />
+      <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}><MapCanvas /></Suspense>
       <button className="destination-box" onClick={() => navigate("/search")}>
         <span className="search-dot" />
         <span>

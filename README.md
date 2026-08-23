@@ -70,8 +70,24 @@ Refresh tokenlar veritabanında SHA-256 özetiyle tutulur ve her yenilemede rota
 
 Faz 3 yolcu deneyimi `apps/passenger/src/features` altında `home`, `rides`, `wallet`, `profile` ve `notifications` alanlarına ayrılır. `PassengerExperienceProvider` favori adres, temsili yakın taksi, bildirim, cüzdan ve yolculuk filtrelerinin UI state'ini yönetir. Profil ekranı mevcut `/users/me` API'sini kullanır; diğer veri kaynakları gerçek GPS/dispatch/ödeme servisleri geldiğinde feature bileşenleri değişmeden repository/API katmanına taşınabilecek tipli sözleşmelerle hazırlanmıştır.
 
+## Konum ve yolculuk altyapısı
+
+Faz 4 ile MapLibre GL tabanlı harita, browser geolocation izin akışı, Nominatim uyumlu geocoding ve OSRM uyumlu routing adaptörleri eklendi. Provider adresleri environment değişkenleriyle self-hosted veya ticari servislere taşınabilir. Yolculuk talebi, sunucu tarafı fiyat tahmini, temel uygun sürücü eşleştirme, durum makinesi, iptal kaydı ve WebSocket `ride.updated` kanalı hazırdır.
+
+```text
+POST /api/v1/locations/route
+GET  /api/v1/locations/search
+GET  /api/v1/locations/reverse
+POST /api/v1/rides
+GET  /api/v1/rides/current
+POST /api/v1/rides/:rideId/match
+POST /api/v1/rides/:rideId/cancel
+PATCH /api/v1/rides/:rideId/status
+POST  /api/v1/rides/:rideId/location
+```
+
 ## Faz sınırı
 
-Faz 3 kullanıcı/sürücü/admin authentication çekirdeğinin üstünde yolcu uygulamasının mobil-first arayüzünü tamamlar. Harita, taksi konumları, rota ve ödeme verileri temsili UI state'idir. Gerçek GPS, dispatch, ödeme, AI, kampanya, rezervasyon ve taksi çağırma iş kuralları bilerek eklenmemiştir.
+Temel eşleştirme doğrulanmış, çevrim içi ve uygun araç tipindeki sürücüyü puan/toplam yolculuğa göre seçer; gelişmiş AI dispatch içermez. Public OSM servisleri geliştirme içindir ve production trafiğinde kullanım politikasına uygun managed/self-hosted provider seçilmelidir. Vercel Functions kalıcı WebSocket sunmadığı için realtime API uzun yaşayan Node/container ortamında veya managed realtime serviste çalıştırılmalıdır. Ödeme tahsilatı, AI dispatch, kampanya ve rezervasyon henüz yoktur.
 
 Mobil uygulamalar responsive ve dokunmatik önceliklidir. Store paketlemesi için sonraki fazda Capacitor/native kabuk, OS güvenli token saklama, push notification ve platform izinleri eklenebilir. Vercel test kurulumu için `docs/VERCEL.md` dosyasına bakın.

@@ -21,6 +21,9 @@ const schema = z.object({
   OTP_EXPOSE_CODE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   OTP_PROVIDER_WEBHOOK_URL: z.url().optional(),
   OTP_PROVIDER_API_KEY: z.string().min(1).optional(),
+  GEOCODING_URL: z.url().default('https://nominatim.openstreetmap.org'),
+  ROUTING_URL: z.url().default('https://router.project-osrm.org'),
+  MAP_SERVICE_USER_AGENT: z.string().default('HeyTaksi/0.1 support@heytaksi.app'),
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174,http://localhost:5175'),
 });
 

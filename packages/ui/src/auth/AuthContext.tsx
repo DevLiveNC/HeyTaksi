@@ -3,7 +3,7 @@ import type { DeviceInput, Role, UserIdentity } from '@heytaksi/shared';
 
 interface Session { user: UserIdentity; accessToken: string; refreshToken: string; }
 interface AuthContextValue {
-  user: UserIdentity | null; loading: boolean;
+  user: UserIdentity | null; accessToken: string | null; loading: boolean;
   emailLogin(email: string, password: string): Promise<void>;
   register(input: Record<string, unknown>): Promise<void>;
   requestOtp(phone: string, purpose: 'login' | 'register'): Promise<{ debugCode?: string }>;
@@ -56,7 +56,7 @@ export function AuthProvider({ apiUrl, children }: PropsWithChildren<{ apiUrl: s
   }, [apiUrl]);
 
   const value = useMemo<AuthContextValue>(() => ({
-    user: session?.user ?? null, loading,
+    user: session?.user ?? null, accessToken: session?.accessToken ?? null, loading,
     async emailLogin(email, password) { setLoading(true); try { save(await post<Session>('/auth/login', { email, password, device: getDevice() })); } finally { setLoading(false); } },
     async register(input) { setLoading(true); try { save(await post<Session>('/auth/register', { ...input, device: getDevice() })); } finally { setLoading(false); } },
     async requestOtp(phone, purpose) { setLoading(true); try { return await post<{ debugCode?: string }>('/auth/otp/request', { phone, purpose }); } finally { setLoading(false); } },

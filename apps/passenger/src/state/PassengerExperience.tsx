@@ -52,7 +52,8 @@ interface State {
 type Action =
   | { type: "mark-notifications-read" }
   | { type: "set-ride-filter"; value: State["selectedRideFilter"] }
-  | { type: "remove-address"; id: string };
+  | { type: "remove-address"; id: string }
+  | { type: "save-address"; address: Address };
 
 const initialState: State = {
   currentLocation: "Yenişehir, Mersin",
@@ -161,6 +162,14 @@ function reducer(state: State, action: Action): State {
     return {
       ...state,
       addresses: state.addresses.filter((item) => item.id !== action.id),
+    };
+  if (action.type === "save-address")
+    return {
+      ...state,
+      addresses: [
+        ...state.addresses.filter((item) => item.type !== action.address.type),
+        action.address,
+      ],
     };
   return state;
 }

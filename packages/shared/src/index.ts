@@ -88,7 +88,18 @@ export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
-export const websocketEvents = { CONNECTION_READY: 'connection.ready', PING: 'ping', PONG: 'pong', ERROR: 'error' } as const;
+export const coordinateSchema = z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180), address: z.string().trim().min(2).max(500) });
+export const vehicleTypes = ['standard', 'comfort', 'xl', 'accessible'] as const;
+export const rideStatuses = ['searching', 'driver_assigned', 'driver_arriving', 'driver_arrived', 'started', 'in_progress', 'completed', 'cancelled'] as const;
+export const createRideSchema = z.object({ pickup: coordinateSchema, destination: coordinateSchema, vehicleType: z.enum(vehicleTypes) });
+export const rideStatusSchema = z.enum(rideStatuses);
+export type Coordinate = z.infer<typeof coordinateSchema>;
+export type VehicleType = (typeof vehicleTypes)[number];
+export type RideStatus = (typeof rideStatuses)[number];
+export type CreateRideInput = z.infer<typeof createRideSchema>;
+export interface RouteEstimate { distanceMeters: number; durationSeconds: number; geometry: { type: 'LineString'; coordinates: [number, number][] }; estimatedFare?: number; }
+
+export const websocketEvents = { CONNECTION_READY: 'connection.ready', AUTH: 'auth', AUTHENTICATED: 'authenticated', RIDE_SUBSCRIBE: 'ride.subscribe', RIDE_UPDATED: 'ride.updated', PING: 'ping', PONG: 'pong', ERROR: 'error' } as const;
 export interface RealtimeEnvelope<T = unknown> {
   event: (typeof websocketEvents)[keyof typeof websocketEvents] | string;
   data: T;

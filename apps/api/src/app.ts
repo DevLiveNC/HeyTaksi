@@ -12,6 +12,7 @@ import { authPlugin } from './core/security/auth.plugin.js';
 import { databasePlugin } from './infrastructure/database/plugin.js';
 import { redisPlugin } from './infrastructure/redis/plugin.js';
 import { realtimeRoutes } from './infrastructure/realtime/routes.js';
+import { realtimeHubPlugin } from './infrastructure/realtime/hub.js';
 import { apiModules } from './modules/index.js';
 
 export async function buildApp() {
@@ -27,6 +28,7 @@ export async function buildApp() {
   await app.register(databasePlugin);
   await app.register(redisPlugin);
   await app.register(authPlugin);
+  await app.register(realtimeHubPlugin);
 
   app.get('/health/live', async () => ({ status: 'ok', service: 'heytaksi-api', timestamp: new Date().toISOString() }));
   app.get('/health/ready', async (_request, reply) => {

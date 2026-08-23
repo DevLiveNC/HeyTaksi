@@ -1,0 +1,3 @@
+import { describe, expect, it } from 'vitest';
+import { createRideSchema, rideStatusSchema } from '@heytaksi/shared';
+describe('ride contracts',()=>{it('accepts valid pickup and destination coordinates',()=>{expect(createRideSchema.safeParse({pickup:{latitude:36.81,longitude:34.64,address:'Yenişehir, Mersin'},destination:{latitude:36.78,longitude:34.58,address:'Mezitli, Mersin'},vehicleType:'standard'}).success).toBe(true)});it('contains the full ride state lifecycle',()=>{for(const status of ['searching','driver_assigned','driver_arriving','driver_arrived','started','in_progress','completed','cancelled'])expect(rideStatusSchema.safeParse(status).success).toBe(true)})});

@@ -86,8 +86,39 @@ PATCH /api/v1/rides/:rideId/status
 POST  /api/v1/rides/:rideId/location
 ```
 
+`MAP_FALLBACK=true` iken routing/geocoding sağlayıcısına ulaşılamazsa geliştirme ortamı için yaklaşık rota/adres üretilir; production'da bu mod kapatılmalıdır.
+
+## Sürücü deneyimi (Faz 5)
+
+Sürücü uygulaması (`apps/driver`) koyu temalı bir sürücü konsolu sunar: ana ekranda çevrim içi anahtarı, günlük kazanç, bugünkü yolculuk sayısı, ortalama puan, yoğunluk bölgeleri ve MapLibre haritası yer alır. Sürücü durum makinesi beş durumdan oluşur:
+
+```text
+offline ⇄ online → available ⇄ paused        (sürücü seçimi: offline/online/paused)
+                   ↘ on_trip                 (sistem: teklif kabulü ile girilir, bitişte available'a döner)
+```
+
+Yolcu eşleştiğinde sürücüye 20 saniyelik kabul penceresiyle `ride.offer` bildirimi gider (pickup, varış, mesafe, tahmini süre, tahmini kazanç, yolcu puanı, kabul/red). Kabul edilirse akış `driver_arriving → driver_arrived → started → in_progress → completed` durum makinesiyle ilerler; bekleme süresi `driver_arrived` anından itibaren ölçülür. Sürücü; harita navigasyonu, yolcu bilgileri, maskeli telefonla güvenli arama, yolculuk içi mesajlaşma, nedenli iptal ve yolcu puanlama özelliklerine sahiptir. Kazanç ekranı günlük/haftalık/aylık özet ve yolculuk bazlı döküm gösterir; ödeme çekme sistemi bu fazda bilinçli olarak yoktur.
+
+```text
+GET   /api/v1/drivers/me/dashboard            özet + yoğunluk bölgeleri (son 3 saat)
+PATCH /api/v1/drivers/me/availability         offline | online | paused
+GET   /api/v1/drivers/me/rides/current        bekleyen teklif veya aktif yolculuk
+GET   /api/v1/drivers/me/earnings?period=     day | week | month
+POST  /api/v1/drivers/me/location             sürücü konum sinyali (10 sn'de bir)
+POST  /api/v1/rides/:rideId/accept|reject     teklif yanıtı (ret kaydı eşleşmede hariç tutulur)
+GET|POST /api/v1/rides/:rideId/messages       yolculuk içi mesajlaşma
+POST  /api/v1/rides/:rideId/rating            tamamlanan yolculukta karşılıklı puanlama
+GET   /api/v1/rides/:rideId/contact           maskeli numara + güvenli arama notları
+```
+
+WebSocket kanalına `driver.subscribe` ile abone olunur; `ride.offer`, `driver.updated`, `ride.updated` ve `ride.message` olayları akar. Kabul penceresi dolan atamalar sunucu tarafından otomatik olarak aramaya döner ve yolcu uygulamaya bildirilir. Demo verisi için:
+
+```bash
+npm run db:seed-demo   # driver@heytaksi.com / HeyTaksi2026 (+ yolcu ve geçmiş yolculuklar)
+```
+
 ## Faz sınırı
 
-Temel eşleştirme doğrulanmış, çevrim içi ve uygun araç tipindeki sürücüyü puan/toplam yolculuğa göre seçer; gelişmiş AI dispatch içermez. Public OSM servisleri geliştirme içindir ve production trafiğinde kullanım politikasına uygun managed/self-hosted provider seçilmelidir. Vercel Functions kalıcı WebSocket sunmadığı için realtime API uzun yaşayan Node/container ortamında veya managed realtime serviste çalıştırılmalıdır. Ödeme tahsilatı, AI dispatch, kampanya ve rezervasyon henüz yoktur.
+Temel eşleştirme doğrulanmış, çevrim içi ve uygun araç tipindeki sürücüyü puan/toplam yolculuğa göre seçer; gelişmiş AI dispatch içermez. Public OSM servisleri geliştirme içindir ve production trafiğinde kullanım politikasına uygun managed/self-hosted provider seçilmelidir. Vercel Functions kalıcı WebSocket sunmadığı için realtime API uzun yaşayan Node/container ortamında veya managed realtime serviste çalıştırılmalıdır. Ödeme tahsilatı, sürücü ödeme çekme, kampanya ve rezervasyon henüz yoktur. Güvenli aramada numara arayüzde maskelenir; gerçek proxy/anonim numara servisi sonraki fazdadır.
 
 Mobil uygulamalar responsive ve dokunmatik önceliklidir. Store paketlemesi için sonraki fazda Capacitor/native kabuk, OS güvenli token saklama, push notification ve platform izinleri eklenebilir. Vercel test kurulumu için `docs/VERCEL.md` dosyasına bakın.

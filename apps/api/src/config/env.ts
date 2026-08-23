@@ -24,6 +24,8 @@ const schema = z.object({
   GEOCODING_URL: z.url().default('https://nominatim.openstreetmap.org'),
   ROUTING_URL: z.url().default('https://router.project-osrm.org'),
   MAP_SERVICE_USER_AGENT: z.string().default('HeyTaksi/0.1 support@heytaksi.app'),
+  // Sağlayıcı erişilemezse geliştirme ortamında yaklaşık rota/adres üretir; production'da kapatılır.
+  MAP_FALLBACK: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174,http://localhost:5175'),
 });
 

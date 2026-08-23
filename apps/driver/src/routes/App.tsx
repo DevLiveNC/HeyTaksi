@@ -1,7 +1,32 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { AppShell, AuthGate, AuthPage, EmptyState, useAuth } from '@heytaksi/ui';
-const nav = <><NavLink to="/dashboard">⌂<span>Panel</span></NavLink><NavLink to="/earnings">₺<span>Kazanç</span></NavLink><NavLink to="/account">●<span>Hesabım</span></NavLink></>;
-function Dashboard() { return <><section className="driver-hero"><div><p className="eyebrow">SÜRÜCÜ DURUMU</p><h1>Çevrim dışısın</h1><p>Sürücü belgelerin ve aracın profil servisinden güvenli şekilde yönetilebilir.</p></div><button disabled>Çevrim içi ol</button></section><div className="metric-grid"><article><small>Bugün</small><strong>₺0</strong><span>Kazanç</span></article><article><small>Bugün</small><strong>0</strong><span>Yolculuk</span></article></div></>; }
-function Account(){const {user,logout}=useAuth();return <section className="profile-card"><div className="profile-avatar">S</div><small>HEY TAKSİ SÜRÜCÜ</small><h2>{user?.email??user?.phone}</h2><p>Belge ve araç yönetimi API altyapısı hazır.</p><div className="profile-actions"><button onClick={()=>void logout()}>Güvenli çıkış</button></div></section>}
-function DriverApp() { return <AppShell title="Hey Taksi" subtitle="Sürücü" navigation={nav}><Routes><Route path="/dashboard" element={<Dashboard/>}/><Route path="/earnings" element={<EmptyState icon="₺" title="Kazançların" description="Kazanç raporları için modül alanı hazır."/>}/><Route path="/account" element={<Account/>}/><Route path="*" element={<Navigate to="/dashboard" replace/>}/></Routes></AppShell>; }
-export function App() { return <AuthGate roles={['driver']} fallback={<AuthPage audience="Sürücü" allowedRole="driver"/>}><DriverApp/></AuthGate>; }
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthGate, AuthPage } from "@heytaksi/ui";
+import { DriverLayout } from "../components/DriverLayout";
+import { DriverProvider } from "../state/DriverContext";
+import { DashboardPage } from "../features/dashboard/DashboardPage";
+import { EarningsPage } from "../features/earnings/EarningsPage";
+import { AccountPage } from "../features/account/AccountPage";
+import { ActiveRidePage } from "../features/ride/ActiveRidePage";
+
+function DriverApp() {
+  return (
+    <DriverProvider>
+      <Routes>
+        <Route element={<DriverLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/earnings" element={<EarningsPage />} />
+          <Route path="/account" element={<AccountPage />} />
+        </Route>
+        <Route path="/ride" element={<ActiveRidePage />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </DriverProvider>
+  );
+}
+
+export function App() {
+  return (
+    <AuthGate roles={["driver"]} fallback={<AuthPage audience="Sürücü" allowedRole="driver" />}>
+      <DriverApp />
+    </AuthGate>
+  );
+}

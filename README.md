@@ -114,7 +114,8 @@ GET   /api/v1/rides/:rideId/contact           maskeli numara + güvenli arama no
 WebSocket kanalına `driver.subscribe` ile abone olunur; `ride.offer`, `driver.updated`, `ride.updated` ve `ride.message` olayları akar. Kabul penceresi dolan atamalar sunucu tarafından otomatik olarak aramaya döner ve yolcu uygulamaya bildirilir. Demo verisi için:
 
 ```bash
-npm run db:seed-demo   # driver@heytaksi.com / HeyTaksi2026 (+ yolcu ve geçmiş yolculuklar)
+npm run db:seed-demo       # driver@heytaksi.com / HeyTaksi2026 (+ yolcu ve geçmiş yolculuklar)
+npm run db:seed-all-demo   # tüm roller için demo hesaplar: passenger, driver, admin, dispatcher, support (docs/DEMO_ACCOUNTS.md)
 ```
 
 ## Faz sınırı

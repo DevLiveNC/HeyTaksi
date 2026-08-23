@@ -17,7 +17,8 @@
     "format": "prettier --write .",
     "db:migrate": "npm run db:migrate --workspace=@heytaksi/api",
     "db:seed-admin": "npm run db:seed-admin --workspace=@heytaksi/api",
-    "db:seed-demo": "npm run db:seed-demo --workspace=@heytaksi/api"
+    "db:seed-demo": "npm run db:seed-demo --workspace=@heytaksi/api",
+    "db:seed-all-demo": "npm run db:seed-all-demo --workspace=@heytaksi/api"
   },
   "engines": { "node": ">=22" },
   "devDependencies": {

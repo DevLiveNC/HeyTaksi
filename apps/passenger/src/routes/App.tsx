@@ -1,0 +1,6 @@
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { AppShell, EmptyState } from '@heytaksi/ui';
+
+const nav = <><NavLink to="/home">⌂<span>Ana Sayfa</span></NavLink><NavLink to="/rides">≡<span>Yolculuklar</span></NavLink><NavLink to="/account">●<span>Hesabım</span></NavLink></>;
+function Home() { return <><section className="hero"><p className="eyebrow">GÜVENLİ · HIZLI · ŞEFFAF</p><h1>Nereye gitmek<br/>istersiniz?</h1><button disabled>Konumunu seç <span>→</span></button><small>GPS ve yolculuk talebi Faz 2'de etkinleştirilecek.</small></section><section className="status-card"><span className="pulse"/><div><strong>Hey Taksi hazır</strong><p>Uygulama altyapısı çalışıyor.</p></div></section></>; }
+export function App() { return <AppShell title="Hey Taksi" subtitle="Yolcu" navigation={nav}><Routes><Route path="/home" element={<Home/>}/><Route path="/rides" element={<EmptyState icon="↗" title="Yolculukların" description="Geçmiş ve aktif yolculukların burada görünecek."/>}/><Route path="/account" element={<EmptyState icon="●" title="Hesabın" description="Profil ve güvenlik ayarları için hazır."/>}/><Route path="*" element={<Navigate to="/home" replace/>}/></Routes></AppShell>; }

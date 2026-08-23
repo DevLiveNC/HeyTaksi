@@ -1,8 +1,42 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { AppShell, AuthGate, AuthPage, EmptyState, useAuth } from '@heytaksi/ui';
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthGate, AuthPage } from "@heytaksi/ui";
+import { PassengerLayout } from "../components/PassengerLayout";
+import { HomePage } from "../features/home/HomePage";
+import { DestinationSearchPage } from "../features/home/DestinationSearchPage";
+import { RidesPage } from "../features/rides/RidesPage";
+import { RideDetailPage } from "../features/rides/RideDetailPage";
+import { WalletPage } from "../features/wallet/WalletPage";
+import { ProfilePage } from "../features/profile/ProfilePage";
+import { ProfileSettingsPage } from "../features/profile/ProfileSettingsPage";
+import { NotificationsPage } from "../features/notifications/NotificationsPage";
+import { PassengerExperienceProvider } from "../state/PassengerExperience";
 
-const nav = <><NavLink to="/home">⌂<span>Ana Sayfa</span></NavLink><NavLink to="/rides">≡<span>Yolculuklar</span></NavLink><NavLink to="/account">●<span>Hesabım</span></NavLink></>;
-function Home() { return <><section className="hero"><p className="eyebrow">GÜVENLİ · HIZLI · ŞEFFAF</p><h1>Nereye gitmek<br/>istersiniz?</h1><button disabled>Konumunu seç <span>→</span></button><small>Taksi çağırma sistemi sonraki fazda etkinleştirilecek.</small></section><section className="status-card"><span className="pulse"/><div><strong>Hey Taksi hazır</strong><p>Kimliğin doğrulandı, güvenle devam edebilirsin.</p></div></section></>; }
-function Account() { const { user, logout } = useAuth(); return <section className="profile-card"><div className="profile-avatar">{(user?.email ?? user?.phone ?? 'H').slice(0,1).toUpperCase()}</div><small>DOĞRULANMIŞ YOLCU</small><h2>{user?.email ?? user?.phone}</h2><p>Rol: {user?.role}</p><div className="profile-actions"><button onClick={()=>void logout(false)}>Çıkış yap</button><button onClick={()=>void logout(true)}>Tüm cihazlardan çık</button></div></section>; }
-function PassengerApp() { return <AppShell title="Hey Taksi" subtitle="Yolcu" navigation={nav}><Routes><Route path="/home" element={<Home/>}/><Route path="/rides" element={<EmptyState icon="↗" title="Yolculukların" description="Geçmiş ve aktif yolculukların burada görünecek."/>}/><Route path="/account" element={<Account/>}/><Route path="*" element={<Navigate to="/home" replace/>}/></Routes></AppShell>; }
-export function App() { return <AuthGate roles={['passenger']} fallback={<AuthPage audience="Yolcu" allowedRole="passenger"/>}><PassengerApp/></AuthGate>; }
+function PassengerApp() {
+  return (
+    <PassengerExperienceProvider>
+      <Routes>
+        <Route element={<PassengerLayout />}>
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/rides" element={<RidesPage />} />
+          <Route path="/rides/:rideId" element={<RideDetailPage />} />
+          <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile/:section" element={<ProfileSettingsPage />} />
+        </Route>
+        <Route path="/search" element={<DestinationSearchPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
+      </Routes>
+    </PassengerExperienceProvider>
+  );
+}
+export function App() {
+  return (
+    <AuthGate
+      roles={["passenger"]}
+      fallback={<AuthPage audience="Yolcu" allowedRole="passenger" />}
+    >
+      <PassengerApp />
+    </AuthGate>
+  );
+}

@@ -66,8 +66,12 @@ Başlıca endpointler:
 
 Refresh tokenlar veritabanında SHA-256 özetiyle tutulur ve her yenilemede rotate edilir. Parolalar Argon2 ile hashlenir; OTP kodları HMAC özeti, süre, deneme sınırı ve istek limitiyle korunur. Production SMS teslimatı bir sağlayıcı adaptörü gerektirir; OTP kodu production yanıtlarına/loglarına yazılmaz.
 
+## Yolcu UI/UX sistemi
+
+Faz 3 yolcu deneyimi `apps/passenger/src/features` altında `home`, `rides`, `wallet`, `profile` ve `notifications` alanlarına ayrılır. `PassengerExperienceProvider` favori adres, temsili yakın taksi, bildirim, cüzdan ve yolculuk filtrelerinin UI state'ini yönetir. Profil ekranı mevcut `/users/me` API'sini kullanır; diğer veri kaynakları gerçek GPS/dispatch/ödeme servisleri geldiğinde feature bileşenleri değişmeden repository/API katmanına taşınabilecek tipli sözleşmelerle hazırlanmıştır.
+
 ## Faz sınırı
 
-Faz 2 kullanıcı/sürücü/admin kimlik doğrulama, RBAC, profil, cihaz, güvenli oturum ve audit altyapısını içerir. Ödeme, GPS, AI, ayrıntılı yolculuk, kampanya, rezervasyon ve taksi çağırma iş kuralları bilerek eklenmemiştir.
+Faz 3 kullanıcı/sürücü/admin authentication çekirdeğinin üstünde yolcu uygulamasının mobil-first arayüzünü tamamlar. Harita, taksi konumları, rota ve ödeme verileri temsili UI state'idir. Gerçek GPS, dispatch, ödeme, AI, kampanya, rezervasyon ve taksi çağırma iş kuralları bilerek eklenmemiştir.
 
 Mobil uygulamalar responsive ve dokunmatik önceliklidir. Store paketlemesi için sonraki fazda Capacitor/native kabuk, OS güvenli token saklama, push notification ve platform izinleri eklenebilir. Vercel test kurulumu için `docs/VERCEL.md` dosyasına bakın.

@@ -1,0 +1,100 @@
+{
+  "generatedAt": "2026-08-23",
+  "seedCommand": "npm run db:seed-all-demo",
+  "accounts": [
+    {
+      "role": "passenger",
+      "email": "passenger.demo@heytaksi.com",
+      "password": "PassengerDemo2026!",
+      "phone": "+905551110001",
+      "firstName": "Demo",
+      "lastName": "Yolcu",
+      "description": "Yolcu uygulaması - yolculuk talep etme, cüzdan, profil"
+    },
+    {
+      "role": "driver",
+      "email": "driver.demo@heytaksi.com",
+      "password": "DriverDemo2026!",
+      "phone": "+905331110002",
+      "firstName": "Demo",
+      "lastName": "Sürücü",
+      "description": "Sürücü uygulaması - teklif kabul, navigasyon, kazanç",
+      "vehicle": {
+        "plate": "34DMO001",
+        "brand": "Toyota",
+        "model": "Corolla",
+        "year": 2023,
+        "color": "Beyaz",
+        "type": "standard"
+      },
+      "driverStatus": {
+        "verification": "verified",
+        "rating": 4.92,
+        "totalRides": 0,
+        "acceptanceRate": 96,
+        "availability": "offline"
+      }
+    },
+    {
+      "role": "admin",
+      "email": "admin.demo@heytaksi.com",
+      "password": "AdminDemo2026!",
+      "phone": "+905551110003",
+      "firstName": "Demo",
+      "lastName": "Admin",
+      "description": "Tam yetkili yönetici - tüm yönetim paneli erişimi",
+      "isSuperAdmin": true,
+      "department": "Yönetim",
+      "permissions": ["all"]
+    },
+    {
+      "role": "dispatcher",
+      "email": "dispatcher.demo@heytaksi.com",
+      "password": "DispatcherDemo2026!",
+      "phone": "+905551110004",
+      "firstName": "Demo",
+      "lastName": "Dispatcher",
+      "description": "Operasyon görevlisi - dispatch yönetimi",
+      "isSuperAdmin": false,
+      "department": "Operasyon",
+      "permissions": ["admin:access", "users:read", "dispatch:manage"]
+    },
+    {
+      "role": "support",
+      "email": "support.demo@heytaksi.com",
+      "password": "SupportDemo2026!",
+      "phone": "+905551110005",
+      "firstName": "Demo",
+      "lastName": "Support",
+      "description": "Destek görevlisi - destek kayıtları yönetimi",
+      "isSuperAdmin": false,
+      "department": "Destek",
+      "permissions": ["admin:access", "users:read", "support:manage"]
+    }
+  ],
+  "legacyDemoAccounts": [
+    {
+      "role": "passenger",
+      "email": "passenger@heytaksi.com",
+      "password": "HeyTaksi2026",
+      "source": "npm run db:seed-demo"
+    },
+    {
+      "role": "driver",
+      "email": "driver@heytaksi.com",
+      "password": "HeyTaksi2026",
+      "source": "npm run db:seed-demo"
+    }
+  ],
+  "loginExample": {
+    "url": "POST http://localhost:3000/api/v1/auth/login",
+    "body": {
+      "email": "passenger.demo@heytaksi.com",
+      "password": "PassengerDemo2026!",
+      "device": {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "platform": "web"
+      }
+    }
+  }
+}

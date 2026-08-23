@@ -55,6 +55,7 @@ export function ActiveRidePage() {
   const booking = useBooking();
   const [ride, setRide] = useState<ActiveRide | null>(booking.activeRide);
   const [error, setError] = useState("");
+  const [socketEpoch, setSocketEpoch] = useState(0);
   const status = (ride?.status ?? "searching") as RideStatus;
   useEffect(() => {
     if (!ride)
@@ -67,24 +68,27 @@ export function ActiveRidePage() {
         })
         .catch(() => navigate("/home"));
   }, [id]);
+  // Faz 6: eşleştirme sunucudaki dağıtım motoru tarafından otomatik yürütülür.
+  // İstemci yalnızca arama sürerken durumu tazeler (WS kopması için güvenlik ağı).
   useEffect(() => {
     if (status !== "searching") return;
-    const timer = setTimeout(() => {
+    const timer = setInterval(() => {
       rideApi
         .match(auth.authorizedFetch, id)
         .then((result) => {
           const value = result.ride as unknown as ActiveRide;
-          setRide(value);
-          booking.setActiveRide(value);
+          setRide((current) => ({ ...current, ...value, dispatch: result.dispatch ?? current?.dispatch }) as ActiveRide);
         })
         .catch((cause) =>
           setError(cause instanceof Error ? cause.message : "Sürücü aranamadı"),
         );
-    }, 2200);
-    return () => clearTimeout(timer);
+    }, 5000);
+    return () => clearInterval(timer);
   }, [id, status]);
   useEffect(() => {
     if (!auth.accessToken) return;
+    let cancelled = false;
+    let retry: number | undefined;
     const socket = new WebSocket(
       wsBaseUrl,
     );
@@ -101,8 +105,10 @@ export function ActiveRidePage() {
         socket.send(
           JSON.stringify({ event: "ride.subscribe", data: { rideId: id } }),
         );
-      if (message.event === "ride.updated") {
-        const update = message.data as Partial<ActiveRide>;
+      if (message.event === "ride.updated" || message.event === "ride.location") {
+        const update = message.data as Partial<ActiveRide> & {
+          driverLocation?: ActiveRide["driverLocation"];
+        };
         setRide((current) => {
           const value = { ...current, ...update } as ActiveRide;
           booking.setActiveRide(value);
@@ -110,8 +116,16 @@ export function ActiveRidePage() {
         });
       }
     };
-    return () => socket.close();
-  }, [id, auth.accessToken]);
+    // Bağlantı koparsa yeniden bağlan: canlı takip kesintisiz sürmeli.
+    socket.onclose = () => {
+      if (!cancelled) retry = window.setTimeout(() => setSocketEpoch((value) => value + 1), 3000);
+    };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retry);
+      socket.close();
+    };
+  }, [id, auth.accessToken, socketEpoch]);
   if (!ride)
     return (
       <div className="ride-loading">
@@ -194,7 +208,19 @@ export function ActiveRidePage() {
         {status === "searching" ? (
           <div className="searching-progress">
             <span />
-            <small>Bu genellikle birkaç saniye sürer</small>
+            {ride.dispatch?.currentOffer ? (
+              <small>
+                {ride.dispatch.currentOffer.driverName} adlı sürücüye ulaşıldı ·{" "}
+                {Math.max(1, Math.round(ride.dispatch.currentOffer.etaSeconds / 60))} dk uzaklıkta
+              </small>
+            ) : ride.dispatch && ride.dispatch.offersSent > 0 ? (
+              <small>
+                {ride.dispatch.offersSent} sürücüye ulaşıldı ·{" "}
+                {(ride.dispatch.radiusMeters / 1000).toFixed(0)} km çevrede aranıyor
+              </small>
+            ) : (
+              <small>Bu genellikle birkaç saniye sürer</small>
+            )}
           </div>
         ) : status === "cancelled" ? (
           <button className="request-primary" onClick={() => navigate("/home")}>

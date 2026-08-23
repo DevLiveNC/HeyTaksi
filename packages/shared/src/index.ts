@@ -182,6 +182,11 @@ export interface DriverRideDetail {
   arrivedAt: string | null;
   waitSeconds: number;
   passengerRated: boolean;
+  /** Faz 6 — bekleyen dağıtım teklifinde doldurulur; atanmış yolculukta boştur. */
+  offerId?: string | null;
+  offerExpiresAt?: string | null;
+  pickupEtaSeconds?: number | null;
+  pickupDistanceMeters?: number | null;
 }
 export interface EarningsRide {
   id: string;
@@ -220,9 +225,247 @@ export interface RideContact {
   safetyNotes: string[];
 }
 
-export const websocketEvents = { CONNECTION_READY: 'connection.ready', AUTH: 'auth', AUTHENTICATED: 'authenticated', RIDE_SUBSCRIBE: 'ride.subscribe', RIDE_SUBSCRIBED: 'ride.subscribed', RIDE_UPDATED: 'ride.updated', RIDE_OFFER: 'ride.offer', RIDE_MESSAGE: 'ride.message', DRIVER_SUBSCRIBE: 'driver.subscribe', DRIVER_SUBSCRIBED: 'driver.subscribed', DRIVER_UPDATED: 'driver.updated', PING: 'ping', PONG: 'pong', ERROR: 'error' } as const;
+export const websocketEvents = {
+  CONNECTION_READY: 'connection.ready', AUTH: 'auth', AUTHENTICATED: 'authenticated',
+  RIDE_SUBSCRIBE: 'ride.subscribe', RIDE_SUBSCRIBED: 'ride.subscribed', RIDE_UPDATED: 'ride.updated',
+  RIDE_OFFER: 'ride.offer', RIDE_OFFER_CLOSED: 'ride.offer.closed', RIDE_MESSAGE: 'ride.message',
+  RIDE_LOCATION: 'ride.location', RIDE_DISPATCH: 'ride.dispatch',
+  DRIVER_SUBSCRIBE: 'driver.subscribe', DRIVER_SUBSCRIBED: 'driver.subscribed', DRIVER_UPDATED: 'driver.updated',
+  DRIVER_LOCATION: 'driver.location', DRIVER_LOCATION_ACK: 'driver.location.ack',
+  PASSENGER_LOCATION: 'passenger.location',
+  DISPATCH_SUBSCRIBE: 'dispatch.subscribe', DISPATCH_SUBSCRIBED: 'dispatch.subscribed',
+  DISPATCH_DRIVERS: 'dispatch.drivers', DISPATCH_DRIVER_MOVED: 'dispatch.driver.moved',
+  DISPATCH_DRIVER_LEFT: 'dispatch.driver.left', DISPATCH_RIDE: 'dispatch.ride',
+  PING: 'ping', PONG: 'pong', ERROR: 'error',
+} as const;
 export interface RealtimeEnvelope<T = unknown> {
   event: (typeof websocketEvents)[keyof typeof websocketEvents] | string;
   data: T;
   timestamp: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Faz 6 — gerçek zamanlı konum ve deterministik dispatch sözleşmeleri
+ * ------------------------------------------------------------------ */
+
+/** Sürücü konum sinyali: WebSocket veya REST üzerinden aynı şema kullanılır. */
+export const locationPingSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  heading: z.number().min(0).max(360).optional(),
+  speedMps: z.number().min(0).max(90).optional(),
+  accuracyMeters: z.number().min(0).max(5000).optional(),
+  rideId: z.uuid().optional(),
+});
+export type LocationPing = z.infer<typeof locationPingSchema>;
+
+/** Sürücü konum sinyali aralığı (saniye) ve bayat kabul edilme sınırı. */
+export const DRIVER_LOCATION_INTERVAL_SECONDS = 5;
+export const DRIVER_LOCATION_TTL_SECONDS = 60;
+/** Teklif kabul penceresi (saniye): dolduğunda sıradaki sürücüye geçilir. */
+export const DISPATCH_OFFER_TTL_SECONDS = 20;
+/** Bir yolculuk için toplam arama süresi (saniye). */
+export const DISPATCH_SEARCH_TTL_SECONDS = 180;
+/** Arama yarıçapları (metre): her turda bir sonraki yarıçapa genişler. */
+export const DISPATCH_RADIUS_STEPS_METERS = [3000, 6000, 12000] as const;
+
+export interface DriverLocationSnapshot {
+  driverId: string;
+  latitude: number;
+  longitude: number;
+  heading: number | null;
+  speedMps: number | null;
+  accuracyMeters: number | null;
+  availability: DriverAvailability;
+  vehicleType: VehicleType | null;
+  rideId: string | null;
+  recordedAt: string;
+}
+
+export interface LiveDriverMarker extends DriverLocationSnapshot {
+  driverName: string;
+  plate: string | null;
+  rating: number;
+  /** Konum sinyalinin yaşı (saniye); UI bayat işaretçileri soluklaştırır. */
+  ageSeconds: number;
+}
+
+/** Dispatch skor bileşenleri: her biri 0-1 aralığında normalize edilir. */
+export interface DispatchScoreBreakdown {
+  distance: number;
+  eta: number;
+  rating: number;
+  acceptance: number;
+  cancellation: number;
+  total: number;
+}
+
+/** Deterministik sıralamada kullanılan ağırlıklar; toplamı 1.0'dır. AI yoktur. */
+export const dispatchWeights = {
+  distance: 0.35,
+  eta: 0.25,
+  rating: 0.15,
+  acceptance: 0.15,
+  cancellation: 0.1,
+} as const;
+
+export interface DispatchCandidate {
+  driverId: string;
+  driverUserId: string;
+  driverName: string;
+  vehicleId: string | null;
+  vehicleType: VehicleType;
+  plate: string | null;
+  distanceMeters: number;
+  etaSeconds: number;
+  rating: number;
+  acceptanceRate: number;
+  cancellationRate: number;
+  score: number;
+  breakdown: DispatchScoreBreakdown;
+  rank: number;
+}
+
+export const dispatchOfferStatuses = ['pending', 'accepted', 'rejected', 'expired', 'cancelled'] as const;
+export type DispatchOfferStatus = (typeof dispatchOfferStatuses)[number];
+export const dispatchSessionStatuses = ['searching', 'assigned', 'exhausted', 'cancelled'] as const;
+export type DispatchSessionStatus = (typeof dispatchSessionStatuses)[number];
+
+export interface DispatchOfferView {
+  id: string;
+  rideId: string;
+  driverId: string;
+  driverName: string;
+  status: DispatchOfferStatus;
+  rank: number;
+  score: number;
+  etaSeconds: number;
+  distanceMeters: number;
+  offeredAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  reasonCode: string | null;
+}
+
+/** Yolcuya ve operasyona gösterilen arama durumu. */
+export interface DispatchStatusView {
+  rideId: string;
+  status: DispatchSessionStatus | 'idle';
+  round: number;
+  radiusMeters: number;
+  candidatesFound: number;
+  offersSent: number;
+  expiresAt: string | null;
+  currentOffer: {
+    driverName: string;
+    etaSeconds: number;
+    distanceMeters: number;
+    expiresAt: string;
+  } | null;
+}
+
+export interface LiveRideMarker {
+  rideId: string;
+  status: RideStatus;
+  vehicleType: VehicleType;
+  passengerName: string | null;
+  driverName: string | null;
+  pickup: { latitude: number; longitude: number; address: string };
+  destination: { latitude: number; longitude: number; address: string };
+  driverLocation: { latitude: number; longitude: number; heading: number | null } | null;
+  createdAt: string;
+  waitingSeconds: number;
+}
+
+export interface DispatchOverview {
+  drivers: LiveDriverMarker[];
+  rides: LiveRideMarker[];
+  counts: {
+    online: number;
+    available: number;
+    onTrip: number;
+    paused: number;
+    searchingRides: number;
+    activeRides: number;
+  };
+  generatedAt: string;
+}
+
+/** Haversine mesafesi (metre) — dispatch ve UI aynı formülü paylaşır. */
+export function haversineMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number {
+  const radians = (value: number) => (value * Math.PI) / 180;
+  const deltaLatitude = radians(b.latitude - a.latitude);
+  const deltaLongitude = radians(b.longitude - a.longitude);
+  const h =
+    Math.sin(deltaLatitude / 2) ** 2 +
+    Math.cos(radians(a.latitude)) * Math.cos(radians(b.latitude)) * Math.sin(deltaLongitude / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Şehir içi ortalama hız (km/sa) ile yol sapma payı; ETA deterministik hesaplanır. */
+export const ETA_CITY_SPEED_KMH = 26;
+export const ETA_ROAD_FACTOR = 1.35;
+export const ETA_PICKUP_OVERHEAD_SECONDS = 45;
+
+/** Kuş uçuşu mesafeden varış süresi tahmini (saniye). Rota servisi yoksa da çalışır. */
+export function estimateEtaSeconds(directDistanceMeters: number): number {
+  const roadMeters = directDistanceMeters * ETA_ROAD_FACTOR;
+  const seconds = (roadMeters / 1000 / ETA_CITY_SPEED_KMH) * 3600 + ETA_PICKUP_OVERHEAD_SECONDS;
+  return Math.max(60, Math.round(seconds));
+}
+
+/**
+ * Deterministik sürücü skoru: yakınlık, ETA, puan, kabul oranı ve iptal oranı.
+ * Her bileşen 0-1 aralığına normalize edilir, ağırlıklandırılır ve 0-100 arasına ölçeklenir.
+ * Aynı girdi her zaman aynı çıktıyı üretir (rastgelelik veya model yoktur).
+ */
+export function scoreDispatchCandidate(input: {
+  distanceMeters: number;
+  etaSeconds: number;
+  rating: number;
+  acceptanceRate: number;
+  cancellationRate: number;
+  radiusMeters: number;
+}): DispatchScoreBreakdown {
+  const clamp = (value: number) => Math.min(1, Math.max(0, value));
+  const distance = clamp(1 - input.distanceMeters / Math.max(1, input.radiusMeters));
+  // 15 dakikadan uzun ETA sıfır puan alır.
+  const eta = clamp(1 - input.etaSeconds / 900);
+  const rating = clamp((input.rating - 3) / 2);
+  const acceptance = clamp(input.acceptanceRate / 100);
+  const cancellation = clamp(1 - input.cancellationRate / 100);
+  const total =
+    distance * dispatchWeights.distance +
+    eta * dispatchWeights.eta +
+    rating * dispatchWeights.rating +
+    acceptance * dispatchWeights.acceptance +
+    cancellation * dispatchWeights.cancellation;
+  const round2 = (value: number) => Math.round(value * 100) / 100;
+  return {
+    distance: round2(distance),
+    eta: round2(eta),
+    rating: round2(rating),
+    acceptance: round2(acceptance),
+    cancellation: round2(cancellation),
+    total: round2(total * 100),
+  };
+}
+
+/**
+ * Adayları deterministik olarak sıralar: önce skor, eşitlikte ETA, mesafe ve driverId.
+ * Sıralama kararlıdır; aynı liste her çağrıda aynı sırayı verir.
+ */
+export function rankDispatchCandidates<T extends { score: number; etaSeconds: number; distanceMeters: number; driverId: string }>(
+  candidates: T[],
+): T[] {
+  return [...candidates].sort(
+    (a, b) =>
+      b.score - a.score ||
+      a.etaSeconds - b.etaSeconds ||
+      a.distanceMeters - b.distanceMeters ||
+      a.driverId.localeCompare(b.driverId),
+  );
 }

@@ -8,7 +8,8 @@ import type {
 } from "@heytaksi/shared";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../core/errors/app-error.js";
-import { OFFER_TTL_SECONDS } from "../drivers/driver.service.js";
+/** Atanmış ama ilerlemeyen yolculuk için güvenlik ağı (saniye); teklif zaman aşımı dispatch motorundadır. */
+const ASSIGNMENT_STALE_SECONDS = 90;
 import { MapService } from "../locations/map.service.js";
 import { maskPhone } from "../../core/utils/phone.js";
 const multipliers: Record<VehicleType, number> = {
@@ -84,6 +85,10 @@ export class RideService {
       await client.query("COMMIT");
       const result = await this.get(ride.id, passengerId);
       this.app.realtime.publishRide(ride.id, result);
+      // Faz 6: talep alınır alınmaz deterministik dağıtım araması başlar.
+      await this.app.dispatch.start(ride.id).catch((error) => {
+        this.app.log.error({ err: error, rideId: ride.id }, "Dağıtım araması başlatılamadı");
+      });
       return result;
     } catch (error) {
       await client.query("ROLLBACK");
@@ -112,6 +117,12 @@ export class RideService {
   /** Sürücünün bekleyen teklifi veya aktif yolculuğu; süresi dolan atamalar önce aramaya döner. */
   async driverActiveRide(driverUserId: string): Promise<DriverRideDetail | null> {
     await this.releaseStaleAssignments(driverUserId);
+    // Faz 6: henüz kabul edilmemiş dağıtım teklifi aktif yolculuktan önce gelir.
+    const offer = await this.app.dispatch.pendingOfferForDriver(driverUserId);
+    if (offer) {
+      const detail = await this.offerDetail(offer.rideId, offer);
+      if (detail) return detail;
+    }
     const result = await this.app.db.query<{ id: string }>(
       `SELECT r.id FROM rides r JOIN drivers d ON d.id=r.driver_id
        WHERE d.user_id=$1 AND r.status NOT IN ('completed','cancelled')
@@ -119,6 +130,76 @@ export class RideService {
       [driverUserId],
     );
     return result.rows[0] ? this.driverRideDetail(result.rows[0].id, driverUserId) : null;
+  }
+  /** Bekleyen dağıtım teklifini sürücü ekranı sözleşmesine dönüştürür (henüz atama yoktur). */
+  private async offerDetail(
+    rideId: string,
+    offer: { id: string; expiresAt: Date; etaSeconds: number; distanceMeters: number },
+  ): Promise<DriverRideDetail | null> {
+    const result = await this.app.db.query<{
+      id: string;
+      vehicleType: DriverRideDetail["vehicleType"];
+      pickupAddress: string;
+      destinationAddress: string;
+      pickupLatitude: number | null;
+      pickupLongitude: number | null;
+      destinationLatitude: number | null;
+      destinationLongitude: number | null;
+      distanceMeters: number;
+      durationSeconds: number;
+      estimatedFare: number;
+      geometry: DriverRideDetail["geometry"];
+      passengerName: string | null;
+      passengerRating: number | null;
+    }>(
+      `SELECT r.id, r.vehicle_type AS "vehicleType",
+        r.pickup_address AS "pickupAddress", r.destination_address AS "destinationAddress",
+        pl.latitude AS "pickupLatitude", pl.longitude AS "pickupLongitude",
+        dl.latitude AS "destinationLatitude", dl.longitude AS "destinationLongitude",
+        p.distance_meters AS "distanceMeters", p.duration_seconds AS "durationSeconds",
+        p.estimated_fare::float8 AS "estimatedFare", p.route_geometry AS geometry,
+        (pu.first_name||' '||pu.last_name) AS "passengerName",
+        (SELECT ROUND(AVG(rr.stars)::numeric,2)::float8 FROM ride_ratings rr
+          WHERE rr.ratee_id=r.passenger_id AND rr.rater_role='driver') AS "passengerRating"
+       FROM rides r JOIN ride_pricing p ON p.ride_id=r.id
+       LEFT JOIN users pu ON pu.id=r.passenger_id
+       LEFT JOIN ride_locations pl ON pl.ride_id=r.id AND pl.location_type='pickup'
+       LEFT JOIN ride_locations dl ON dl.ride_id=r.id AND dl.location_type='destination'
+       WHERE r.id=$1 AND r.status='searching'`,
+      [rideId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      status: "driver_assigned",
+      vehicleType: row.vehicleType,
+      pickup: { latitude: row.pickupLatitude ?? 0, longitude: row.pickupLongitude ?? 0, address: row.pickupAddress },
+      destination: {
+        latitude: row.destinationLatitude ?? 0,
+        longitude: row.destinationLongitude ?? 0,
+        address: row.destinationAddress,
+      },
+      pickupAddress: row.pickupAddress,
+      destinationAddress: row.destinationAddress,
+      distanceMeters: row.distanceMeters,
+      durationSeconds: row.durationSeconds,
+      estimatedFare: row.estimatedFare,
+      finalFare: null,
+      geometry: row.geometry,
+      passengerName: row.passengerName,
+      passengerRating: row.passengerRating ?? 5,
+      maskedPhone: null,
+      dialPhone: null,
+      assignedAt: null,
+      arrivedAt: null,
+      waitSeconds: 0,
+      passengerRated: false,
+      offerId: offer.id,
+      offerExpiresAt: new Date(offer.expiresAt).toISOString(),
+      pickupEtaSeconds: offer.etaSeconds,
+      pickupDistanceMeters: offer.distanceMeters,
+    };
   }
   async driverRideDetail(rideId: string, driverUserId: string): Promise<DriverRideDetail> {
     const result = await this.app.db.query<{
@@ -196,7 +277,7 @@ export class RideService {
   }
   /** Kabul penceresi dolan atamaları aramaya döndürür. */
   async releaseStaleAssignments(driverUserId?: string): Promise<void> {
-    const params: unknown[] = [OFFER_TTL_SECONDS];
+    const params: unknown[] = [ASSIGNMENT_STALE_SECONDS];
     let filter = "";
     if (driverUserId) {
       params.push(driverUserId);
@@ -259,10 +340,17 @@ export class RideService {
       onlineStatus: true,
       releasedFrom: reason,
     });
+    await this.app.locationService.syncAvailability(driverUserId, "available").catch(() => undefined);
   }
-  /** Sürücü teklifi kabul eder: driver_assigned → driver_arriving. */
+  /**
+   * Sürücü teklifi kabul eder.
+   * Faz 6: bekleyen dağıtım teklifi varsa atama burada yapılır (searching → driver_assigned),
+   * ardından yolculuk driver_arriving durumuna geçer.
+   */
   async accept(rideId: string, driverUserId: string): Promise<DriverRideDetail> {
-    await this.releaseStaleAssignments(driverUserId);
+    const pending = await this.app.dispatch.pendingOffer(rideId);
+    if (pending) await this.app.dispatch.accept(rideId, driverUserId);
+    else await this.releaseStaleAssignments(driverUserId);
     const current = await this.driverRideDetail(rideId, driverUserId);
     if (current.status !== "driver_assigned")
       throw new AppError(409, "RIDE_NOT_ASSIGNABLE", "Bu teklif artık geçerli değil.");
@@ -277,12 +365,21 @@ export class RideService {
     this.app.realtime.publishRide(rideId, await this.get(rideId, driverUserId));
     return this.driverRideDetail(rideId, driverUserId);
   }
-  /** Sürücü teklifi reddeder: yolculuk aramaya döner, sürücü yeniden dağıtıma açılır. */
+  /**
+   * Sürücü teklifi reddeder: teklif kapanır ve dağıtım motoru sıradaki sürücüye geçer.
+   * Atanmış (eski akış) yolculuklarda atama kaldırılır.
+   */
   async reject(rideId: string, driverUserId: string, reason?: string): Promise<{ status: RideStatus }> {
+    const pending = await this.app.dispatch.pendingOffer(rideId);
+    if (pending) {
+      await this.app.dispatch.reject(rideId, driverUserId, reason ?? "driver_rejected");
+      return { status: "searching" };
+    }
     const current = await this.driverRideDetail(rideId, driverUserId);
     if (current.status !== "driver_assigned")
       throw new AppError(409, "RIDE_NOT_ASSIGNABLE", "Bu teklif artık geçerli değil.");
     await this.unassignRide(rideId, driverUserId, reason ?? "driver_rejected");
+    await this.app.dispatch.pump(rideId);
     return { status: "searching" };
   }
   async messages(rideId: string, userId: string): Promise<RideMessage[]> {
@@ -370,77 +467,21 @@ export class RideService {
       ],
     };
   }
+  /**
+   * Faz 6: eşleştirme dağıtım motoruna devredildi. Bu uç, arama oturumunun
+   * çalıştığını garanti eder ve güncel durumu döndürür; idempotenttir.
+   */
   async match(id: string, passengerId: string) {
-    const client = await this.app.db.connect();
-    try {
-      await client.query("BEGIN");
-      const ride = await client.query<{
-        status: RideStatus;
-        vehicle_type: string;
-      }>(
-        "SELECT status,vehicle_type FROM rides WHERE id=$1 AND passenger_id=$2 FOR UPDATE",
-        [id, passengerId],
-      );
-      if (!ride.rows[0] || ride.rows[0].status !== "searching")
-        throw new AppError(
-          409,
-          "RIDE_NOT_SEARCHING",
-          "Yolculuk artık arama durumunda değil.",
-        );
-      const candidate = await client.query<{
-        driver_id: string;
-        vehicle_id: string;
-        driver_user_id: string;
-      }>(
-        `SELECT d.id AS driver_id, dv.id AS vehicle_id, d.user_id AS driver_user_id
-         FROM drivers d
-         JOIN LATERAL (
-           SELECT v.id FROM vehicles v
-           WHERE v.driver_id=d.id AND v.status='active' AND v.vehicle_type=$1
-           ORDER BY v.created_at DESC LIMIT 1
-         ) dv ON TRUE
-         WHERE d.availability IN ('online','available') AND d.verification_status='verified' AND d.driver_status='active'
-           AND NOT EXISTS(SELECT 1 FROM rides r WHERE r.driver_id=d.id AND r.status NOT IN ('completed','cancelled'))
-           AND NOT EXISTS(SELECT 1 FROM ride_rejections rr WHERE rr.ride_id=$2 AND rr.driver_id=d.id)
-         ORDER BY d.rating DESC,d.total_rides DESC LIMIT 1 FOR UPDATE OF d SKIP LOCKED`,
-        [ride.rows[0].vehicle_type, id],
-      );
-      if (!candidate.rows[0]) {
-        await client.query("COMMIT");
-        return { matched: false, ride: await this.get(id, passengerId) };
-      }
-      const c = candidate.rows[0];
-      await client.query(
-        `UPDATE rides SET driver_id=$2,vehicle_id=$3,status='driver_assigned',assigned_at=NOW(),updated_at=NOW() WHERE id=$1`,
-        [id, c.driver_id, c.vehicle_id],
-      );
-      await client.query(
-        `UPDATE drivers SET availability='on_trip',updated_at=NOW() WHERE id=$1`,
-        [c.driver_id],
-      );
-      await client.query(
-        `INSERT INTO ride_status_history(ride_id,from_status,to_status,changed_by) VALUES($1,'searching','driver_assigned',$2)`,
-        [id, passengerId],
-      );
-      await client.query("COMMIT");
-      const updated = await this.get(id, passengerId);
-      this.app.realtime.publishRide(id, updated);
-      // Sürücüye teklif bildirimi: kullanıcı kanalından `ride.offer` gönderilir.
-      this.app.realtime.publishUser(c.driver_user_id, "ride.offer", {
-        ride: await this.driverRideDetail(id, c.driver_user_id),
-        expiresAt: new Date(Date.now() + OFFER_TTL_SECONDS * 1000).toISOString(),
-      });
-      this.app.realtime.publishUser(c.driver_user_id, "driver.updated", {
-        availability: "on_trip",
-        onlineStatus: true,
-      });
-      return { matched: true, ride: updated };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    const ride = (await this.get(id, passengerId)) as { status: RideStatus };
+    if (ride.status !== "searching")
+      return { matched: ride.status !== "cancelled", ride: await this.get(id, passengerId) };
+    const status = await this.app.dispatch.start(id);
+    return {
+      matched: false,
+      searching: true,
+      dispatch: status,
+      ride: await this.get(id, passengerId),
+    };
   }
   async cancel(id: string, userId: string, reason: string, note?: string) {
     const ride = (await this.get(id, userId)) as { status: RideStatus };
@@ -478,18 +519,25 @@ export class RideService {
     } finally {
       client.release();
     }
+    // Faz 6: iptal, açık dağıtım aramasını ve bekleyen teklifleri kapatır.
+    await this.app.dispatch.cancel(id, "ride_cancelled");
     const updated = await this.get(id, userId);
     this.app.realtime.publishRide(id, updated);
     const cancelledDriver = await this.app.db.query<{ user_id: string }>(
       `SELECT d.user_id FROM drivers d JOIN rides r ON r.driver_id=d.id WHERE r.id=$1`,
       [id],
     );
-    if (cancelledDriver.rows[0])
+    if (cancelledDriver.rows[0]) {
       this.app.realtime.publishUser(cancelledDriver.rows[0].user_id, "driver.updated", {
         availability: "available",
         onlineStatus: true,
         releasedFrom: "ride_cancelled",
       });
+      await this.app.locationService
+        .syncAvailability(cancelledDriver.rows[0].user_id, "available")
+        .catch(() => undefined);
+    }
+    this.app.realtime.publishDispatch("dispatch.ride", { rideId: id, status: "cancelled" });
     return updated;
   }
   async updateDriverLocation(id: string, driverUserId: string, location: { latitude: number; longitude: number; heading?: number | undefined; accuracyMeters?: number | undefined }) {
@@ -528,12 +576,18 @@ export class RideService {
     );
     const updated = await this.get(id, driverUserId);
     this.app.realtime.publishRide(id, updated);
-    if (next === "completed")
+    if (next === "completed") {
       this.app.realtime.publishUser(driverUserId, "driver.updated", {
         availability: "available",
         onlineStatus: true,
         releasedFrom: "ride_completed",
       });
+      await this.app.locationService.syncAvailability(driverUserId, "available").catch(() => undefined);
+    } else {
+      // Konum defterindeki yolculuk bağlantısı güncel kalsın.
+      this.app.locationService.invalidate(driverUserId);
+    }
+    this.app.realtime.publishDispatch("dispatch.ride", { rideId: id, status: next });
     return updated;
   }
 }

@@ -103,6 +103,17 @@ export class DriverService {
     );
     const row = driver.rows[0];
     if (!row) throw new AppError(404, 'DRIVER_NOT_FOUND', 'Sürücü profili bulunamadı.');
+    // Idempotenslik: yeniden bağlanan istemci aynı durumu tekrar isteyebilir.
+    // 'online' isteği, sistemin dağıtıma açık saydığı 'available' durumunda da başarılıdır.
+    const alreadyThere =
+      target === row.availability || (target === 'online' && row.availability === 'available');
+    if (alreadyThere) {
+      const current = await this.app.db.query<{ availability: DriverAvailability; onlineStatus: boolean }>(
+        `SELECT availability, online_status AS "onlineStatus" FROM drivers WHERE id=$1`,
+        [row.id],
+      );
+      return current.rows[0]!;
+    }
     const allowed = driverAvailabilityTargetsFor(row.availability);
     if (!allowed.includes(target)) {
       throw new AppError(
@@ -125,25 +136,32 @@ export class DriverService {
       [row.id, next, onlineStatus],
     );
     const result = updated.rows[0]!;
+    // Faz 6: durum değişimi Redis konum defterine ve operasyon paneline yansır.
+    this.app.locationService.invalidate(userId);
+    await this.app.locationService.syncAvailability(userId, result.availability).catch((error) => {
+      this.app.log.warn({ err: error }, 'Sürücü durumu konum defterine yansıtılamadı.');
+    });
+    // Dağıtıma kapanan sürücünün bekleyen teklifi düşer; arama sıradaki sürücüyle sürer.
+    if (next === 'offline' || next === 'paused')
+      await this.app.dispatch.releaseDriver(row.id, `driver_${next}`).catch(() => undefined);
     this.app.realtime.publishUser(userId, 'driver.updated', result);
     return result;
   }
 
+  /**
+   * REST konum sinyali. WebSocket kanalı birincil yoldur; bu uç, soket kapalıyken
+   * veya arka planda çalışan istemciler için yedek olarak korunur.
+   */
   async updateLocation(
     userId: string,
     location: { latitude: number; longitude: number; heading?: number | undefined; accuracyMeters?: number | undefined; speedMps?: number | undefined },
   ): Promise<{ latitude: number; longitude: number; recordedAt: string }> {
-    const driverId = await this.requireDriverId(userId);
-    const result = await this.app.db.query<{ latitude: number; longitude: number; recordedAt: string }>(
-      `INSERT INTO driver_locations(driver_id, latitude, longitude, heading, accuracy_meters, speed_mps)
-       VALUES($1,$2,$3,$4,$5,$6)
-       ON CONFLICT (driver_id) DO UPDATE SET latitude=EXCLUDED.latitude, longitude=EXCLUDED.longitude,
-         heading=EXCLUDED.heading, accuracy_meters=EXCLUDED.accuracy_meters, speed_mps=EXCLUDED.speed_mps,
-         recorded_at=NOW()
-       RETURNING latitude, longitude, recorded_at AS "recordedAt"`,
-      [driverId, location.latitude, location.longitude, location.heading ?? null, location.accuracyMeters ?? null, location.speedMps ?? null],
-    );
-    return result.rows[0]!;
+    const snapshot = await this.app.locationService.recordDriverPing(userId, location);
+    return {
+      latitude: snapshot.latitude,
+      longitude: snapshot.longitude,
+      recordedAt: snapshot.recordedAt,
+    };
   }
 
   async hotspots(): Promise<Hotspot[]> {

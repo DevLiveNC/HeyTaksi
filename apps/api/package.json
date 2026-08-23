@@ -12,7 +12,9 @@
     "db:migrate": "tsx src/infrastructure/database/migrate.ts",
     "db:seed-admin": "tsx src/infrastructure/database/seed-admin.ts",
     "db:seed-demo": "tsx src/infrastructure/database/seed-demo.ts",
-    "db:seed-all-demo": "tsx src/infrastructure/database/seed-all-demo.ts"
+    "db:seed-all-demo": "tsx src/infrastructure/database/seed-all-demo.ts",
+    "db:seed-fleet": "tsx src/infrastructure/database/seed-fleet.ts",
+    "dev:simulate-fleet": "tsx src/infrastructure/database/simulate-fleet.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",

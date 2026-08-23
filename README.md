@@ -1,6 +1,6 @@
 # Hey Taksi
 
-Hey Taksi; yolcu, sürücü ve operasyon ekiplerini aynı platformda buluşturmak üzere tasarlanmış TypeScript monoreposudur. Faz 1, ürün özelliklerinden önce ölçeklenebilir uygulama temelini kurar.
+Hey Taksi; yolcu, sürücü ve operasyon ekiplerini aynı platformda buluşturmak üzere tasarlanmış TypeScript monoreposudur. Faz 6 ile gerçek zamanlı yolculuk ve sürücü eşleştirme sistemi tamamlanmıştır.
 
 ## Mimari
 
@@ -37,6 +37,13 @@ Ayrı terminallerde:
 npm run dev:passenger  # http://localhost:5173
 npm run dev:driver     # http://localhost:5174
 npm run dev:admin      # http://localhost:5175
+```
+
+Canlı dağıtımı gözlemlemek için demo filosunu çalıştırın:
+
+```bash
+npm run db:seed-fleet
+npm run dev:simulate-fleet
 ```
 
 API `http://localhost:3000`, Swagger UI `/docs`, liveness `/health/live`, readiness `/health/ready`, WebSocket `/ws` adresindedir.
@@ -118,8 +125,97 @@ npm run db:seed-demo       # driver@heytaksi.com / HeyTaksi2026 (+ yolcu ve geç
 npm run db:seed-all-demo   # tüm roller için demo hesaplar: passenger, driver, admin, dispatcher, support (docs/DEMO_ACCOUNTS.md)
 ```
 
+## Gerçek zamanlı dispatch (Faz 6)
+
+Faz 6, yolculuk talebinden sürücü atamasına kadar tüm akışı gerçek zamanlı ve deterministik hale getirir. **Bu fazda yapay zekâ kullanılmaz**; sıralama tamamen açık formüllü ve tekrarlanabilirdir.
+
+### Eşleştirme akışı
+
+```text
+Yolcu talebi (POST /rides)
+  ↓ dispatch_sessions kaydı açılır (yarıçap 3 km)
+Uygun sürücüleri bul        Redis GEO yakınlık sorgusu (TTL 60 sn içindeki sinyaller)
+  ↓
+Araç tipine göre filtrele   aktif araç + doğrulanmış sürücü + online/available + aktif yolculuğu yok
+  ↓
+ETA hesapla                 kuş uçuşu × 1.35 yol katsayısı, 26 km/sa şehir hızı, +45 sn hazırlık
+  ↓
+Sürücüleri sırala           ağırlıklı skor (aşağıda), eşitlikte ETA → mesafe → id ile kararlı sıralama
+  ↓
+Teklif gönder               ride.offer, 20 sn kabul penceresi (dispatch_offers)
+  ↓
+Sürücü kabul eder           ride assigned → driver_assigned, oturum kapanır
+```
+
+Sürücü **reddederse veya süre dolarsa** teklif kapanır ve motor aynı sıralamadaki bir sonraki sürücüye geçer. Aday kalmazsa yarıçap 3 km → 6 km → 12 km olarak genişler. Toplam arama süresi 180 saniyedir; sonunda yolcuya sonuçsuz bildirimi gider ve operasyon aramayı yeniden başlatabilir.
+
+### Skorlama
+
+Her bileşen 0-1 aralığına normalize edilir, ağırlıklandırılır ve 0-100 arasına ölçeklenir:
+
+| Bileşen | Ağırlık | Hesap |
+|---|---|---|
+| Mesafe | 0.35 | `1 − mesafe / yarıçap` |
+| ETA | 0.25 | `1 − ETA / 900 sn` |
+| Sürücü puanı | 0.15 | `(puan − 3) / 2` |
+| Kabul oranı | 0.15 | `kabul% / 100` |
+| İptal oranı | 0.10 | `1 − iptal% / 100` |
+
+Kabul ve iptal oranları `dispatch_offers` ile `ride_cancellations` kayıtlarından her yanıt sonrası yeniden hesaplanır; elle girilen değer kullanılmaz. Skorlama saf fonksiyondur ve `apps/api/src/modules/dispatch/dispatch-scoring.test.ts` içinde determinizm, sınır değerler ve sıralama kararlılığı test edilir.
+
+### Sürücü konumu ve Redis
+
+Sürücü uygulaması çevrim içiyken **5 saniyede bir** konum gönderir. Birincil kanal açık WebSocket'tir (`driver.location`); soket kapalıysa aynı sinyal `POST /drivers/me/location` ucuna düşer.
+
+- **Redis birincil kaynaktır**: `drivers:geo` (GEO index, yakınlık sorgusu), `drivers:state` (durum/araç/yolculuk), `drivers:seen` (son görülme, bayat kayıt temizliği).
+- **PostgreSQL yedektir**: `driver_locations` tablosu her sinyalde güncellenir. Redis erişilemezse dispatch kutu filtresi + haversine ile PostgreSQL üzerinden çalışmaya devam eder.
+- Sinyali 60 saniyeden eski olan sürücü aktif defterden düşer ve teklif almaz.
+
+### WebSocket olayları
+
+| Yön | Olay | Açıklama |
+|---|---|---|
+| İstemci → | `auth`, `ping` | JWT doğrulama, canlılık |
+| İstemci → | `ride.subscribe` / `ride.unsubscribe` | Yolculuk kanalı (yalnızca katılımcılar) |
+| İstemci → | `driver.subscribe`, `passenger.subscribe` | Kullanıcı kanalı |
+| İstemci → | `driver.location`, `passenger.location` | Konum sinyali |
+| İstemci → | `dispatch.subscribe` | Operasyon kanalı (`dispatch:monitor` izni) |
+| → İstemci | `ride.offer`, `ride.offer.closed` | Teklif geldi / kapandı (red, zaman aşımı, iptal) |
+| → İstemci | `ride.updated`, `ride.location`, `passenger.location`, `ride.message` | Yolculuk durumu ve canlı konum |
+| → İstemci | `driver.updated`, `driver.location.ack` | Sürücü durumu ve sinyal onayı |
+| → İstemci | `dispatch.drivers`, `dispatch.driver.moved`, `dispatch.driver.left`, `dispatch.ride` | Canlı harita akışı |
+
+Bağlantılar 30 saniyede bir ping ile denetlenir; yanıtsız soketler kapatılır. Tüm istemciler üstel gecikmeyle yeniden bağlanır ve aboneliklerini otomatik kurar.
+
+### API
+
+```text
+GET  /api/v1/dispatch/live                        canlı sürücü + yolculuk anlık görüntüsü (dispatch:monitor)
+GET  /api/v1/dispatch/nearby?latitude=&longitude=  yolcuya anonim yakın sürücüler (kimlik açılmaz)
+GET  /api/v1/dispatch/rides/:rideId                arama durumu + teklif geçmişi (dispatch:monitor)
+GET  /api/v1/dispatch/rides/:rideId/candidates     skor bileşenleriyle aday sıralaması (dispatch:monitor)
+POST /api/v1/dispatch/rides/:rideId/restart        sonuçsuz aramayı yeniden başlat (dispatch:manage)
+```
+
+### Admin canlı haritası
+
+`apps/admin` içindeki **Canlı operasyon** ekranı sürücüleri MapLibre üzerinde tek bir GeoJSON kaynağıyla çizer; her konum güncellemesinde yalnızca kaynak verisi değişir, bu yüzden yüzlerce sürücüde de akıcı kalır. Ekran; durum sayaçları, bekleyen talepler, aktif yolculuklar, sürücü detayları, deterministik sıralama tablosu ve teklif geçmişini gösterir. Tile sağlayıcısına ulaşılamazsa harita çevrimdışı altlığa geçer ve sürücü konumları görünmeye devam eder.
+
+### Demo filosu
+
+```bash
+npm run db:seed-fleet        # 8 sürücü: farklı araç tipi, puan, kabul ve iptal oranı (şifre: FleetDemo2026!)
+npm run dev:simulate-fleet   # sürücüleri hareket ettirir ve teklifleri yanıtlar (yalnızca geliştirme)
+```
+
+Simülatörün teklif davranışı `SIMULATOR_OFFER_POLICY` ile ayarlanır: `accept` (varsayılan, yolculuğu tamamlar), `reject` (sıradaki sürücüye geçişi gösterir) veya `ignore` (zaman aşımı akışını gösterir). `SIMULATOR_ACCEPT_DELAY` saniyesi kadar bekleyerek gerçek sürücü uygulamasına öncelik tanır.
+
 ## Faz sınırı
 
-Temel eşleştirme doğrulanmış, çevrim içi ve uygun araç tipindeki sürücüyü puan/toplam yolculuğa göre seçer; gelişmiş AI dispatch içermez. Public OSM servisleri geliştirme içindir ve production trafiğinde kullanım politikasına uygun managed/self-hosted provider seçilmelidir. Vercel Functions kalıcı WebSocket sunmadığı için realtime API uzun yaşayan Node/container ortamında veya managed realtime serviste çalıştırılmalıdır. Ödeme tahsilatı, sürücü ödeme çekme, kampanya ve rezervasyon henüz yoktur. Güvenli aramada numara arayüzde maskelenir; gerçek proxy/anonim numara servisi sonraki fazdadır.
+Dispatch deterministiktir: sabit ağırlıklı skor, sabit yarıçap adımları ve sabit zaman pencereleri kullanır. Talep tahmini, dinamik fiyatlama veya öğrenen sıralama bilinçli olarak yoktur.
+
+Dağıtım zamanlayıcısı (`dispatchPlugin`) saniyede bir çalışır ve **tek instance** varsayar. Yatay ölçeklemede bu döngü tek bir lider işlemde yürütülmelidir (ör. Redis tabanlı kilit); teklif tekilliği veritabanındaki kısmi tekil indekslerle zaten güvence altındadır. Realtime yayın süreç içi bellekte tutulur; çok instance'lı kurulumda Redis pub/sub köprüsü gerekir.
+
+Vercel Functions kalıcı WebSocket sunmadığı için realtime API uzun yaşayan Node/container ortamında veya managed realtime serviste çalıştırılmalıdır. Public OSM servisleri geliştirme içindir; production trafiğinde managed/self-hosted provider seçilmelidir. Ödeme tahsilatı, sürücü ödeme çekme, kampanya ve rezervasyon henüz yoktur. Güvenli aramada numara arayüzde maskelenir; gerçek proxy/anonim numara servisi sonraki fazdadır.
 
 Mobil uygulamalar responsive ve dokunmatik önceliklidir. Store paketlemesi için sonraki fazda Capacitor/native kabuk, OS güvenli token saklama, push notification ve platform izinleri eklenebilir. Vercel test kurulumu için `docs/VERCEL.md` dosyasına bakın.

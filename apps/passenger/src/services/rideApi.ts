@@ -1,6 +1,7 @@
 import type {
   Coordinate,
   CreateRideInput,
+  DispatchStatusView,
   RouteEstimate,
 } from "@heytaksi/shared";
 export interface SearchResult extends Coordinate {
@@ -55,12 +56,14 @@ export const rideApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  /** Dağıtım aramasının çalıştığını garanti eder ve güncel durumu döndürür (idempotent). */
   match: (fetcher: Parameters<typeof apiData>[0], id: string) =>
-    apiData<{ matched: boolean; ride: Record<string, unknown> }>(
-      fetcher,
-      `/rides/${id}/match`,
-      { method: "POST" },
-    ),
+    apiData<{
+      matched: boolean;
+      searching?: boolean;
+      dispatch?: DispatchStatusView;
+      ride: Record<string, unknown>;
+    }>(fetcher, `/rides/${id}/match`, { method: "POST", body: "{}" }),
   get: (fetcher: Parameters<typeof apiData>[0], id: string) =>
     apiData<Record<string, unknown>>(fetcher, `/rides/${id}`),
   cancel: (fetcher: Parameters<typeof apiData>[0], id: string) =>

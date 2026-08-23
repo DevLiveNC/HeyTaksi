@@ -15,7 +15,8 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint apps/*/src packages/*/src",
     "format": "prettier --write .",
-    "db:migrate": "npm run db:migrate --workspace=@heytaksi/api"
+    "db:migrate": "npm run db:migrate --workspace=@heytaksi/api",
+    "db:seed-admin": "npm run db:seed-admin --workspace=@heytaksi/api"
   },
   "engines": { "node": ">=22" },
   "devDependencies": {

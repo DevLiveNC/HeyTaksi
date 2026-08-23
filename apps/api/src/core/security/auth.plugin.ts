@@ -16,4 +16,8 @@ export const authPlugin = fp(async (app) => {
     await app.authenticate(request, {} as never);
     if (!roles.includes(request.user.role)) throw AppError.forbidden();
   });
+  app.decorate('requirePermissions', (...permissions: string[]) => async (request) => {
+    await app.authenticate(request, {} as never);
+    if (!permissions.every((permission) => request.user.permissions.includes(permission))) throw AppError.forbidden();
+  });
 }, { name: 'auth', dependencies: ['database'] });

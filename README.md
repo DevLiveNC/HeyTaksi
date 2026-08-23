@@ -26,6 +26,8 @@ cp .env.example .env
 npm install
 docker compose up -d postgres redis
 npm run db:migrate
+# .env içindeki ADMIN_* değerleriyle ilk yetkili hesabı oluştur:
+npm run db:seed-admin
 npm run dev:api
 ```
 
@@ -51,8 +53,21 @@ npm test
 
 Tüm değişkenler `.env.example` içinde belgelenmiştir. Production ortamında özellikle `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` ve `CORS_ORIGINS` güvenli değerlerle sağlanmalıdır. `VITE_API_URL` ile `VITE_WS_URL` frontend build zamanında verilir. Secret değerleri repoya eklenmemelidir.
 
+## Authentication API
+
+Başlıca endpointler:
+
+- `POST /api/v1/auth/register`, `/login`, `/refresh`, `/logout`
+- `POST /api/v1/auth/otp/request`, `/otp/verify`
+- `GET /api/v1/auth/me`, `/sessions`; `DELETE /sessions/:sessionId`
+- `GET/PATCH /api/v1/users/me`, `GET /users/me/devices`
+- `GET /api/v1/drivers/me`, `POST /drivers/me/vehicles`, `POST /drivers/me/documents`
+- Yetkili roller için `GET /api/v1/admin/overview`, `/users`, `/audit-logs`
+
+Refresh tokenlar veritabanında SHA-256 özetiyle tutulur ve her yenilemede rotate edilir. Parolalar Argon2 ile hashlenir; OTP kodları HMAC özeti, süre, deneme sınırı ve istek limitiyle korunur. Production SMS teslimatı bir sağlayıcı adaptörü gerektirir; OTP kodu production yanıtlarına/loglarına yazılmaz.
+
 ## Faz sınırı
 
-Bu sürüm temel kimlik doğrulama (kayıt, giriş, token yenileme, profil), rol kontrolü, migration, standart hata/validation/logging, health check ve WebSocket ping/pong altyapısını içerir. Ödeme, GPS, AI, ayrıntılı yolculuk, kampanya ve rezervasyon iş kuralları bilerek eklenmemiştir.
+Faz 2 kullanıcı/sürücü/admin kimlik doğrulama, RBAC, profil, cihaz, güvenli oturum ve audit altyapısını içerir. Ödeme, GPS, AI, ayrıntılı yolculuk, kampanya, rezervasyon ve taksi çağırma iş kuralları bilerek eklenmemiştir.
 
-Mobil uygulamalar responsive ve dokunmatik öncelikli hazırlanmıştır. Store paketlemesi için Faz 2'de Capacitor/native kabuk, güvenli cihaz token saklama, push notification ve platform izinleri eklenebilir.
+Mobil uygulamalar responsive ve dokunmatik önceliklidir. Store paketlemesi için sonraki fazda Capacitor/native kabuk, OS güvenli token saklama, push notification ve platform izinleri eklenebilir. Vercel test kurulumu için `docs/VERCEL.md` dosyasına bakın.

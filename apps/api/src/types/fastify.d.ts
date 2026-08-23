@@ -9,9 +9,13 @@ declare module 'fastify' {
     redis: Redis;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireRoles: (...roles: Role[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requirePermissions: (...permissions: string[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
 declare module '@fastify/jwt' {
-  interface FastifyJWT { payload: UserIdentity & { tokenType: 'access' | 'refresh' }; user: UserIdentity & { tokenType: 'access' | 'refresh' } }
+  interface FastifyJWT {
+    payload: UserIdentity & { tokenType: 'access' | 'refresh'; sid: string; did: string };
+    user: UserIdentity & { tokenType: 'access' | 'refresh'; sid: string; did: string };
+  }
 }

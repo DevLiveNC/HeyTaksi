@@ -16,6 +16,8 @@ import {
   usePassengerExperience,
   type Address,
 } from "../../state/PassengerExperience";
+import { useCurrentLocation } from "../../hooks/useCurrentLocation";
+import { useNearbyDrivers } from "../../hooks/useNearbyDrivers";
 
 const addressIcon = (type: Address["type"]) =>
   type === "home" ? (
@@ -28,6 +30,13 @@ const addressIcon = (type: Address["type"]) =>
 export function HomePage() {
   const { state } = usePassengerExperience();
   const navigate = useNavigate();
+  // Faz 6: yakındaki sürücü sayısı ve bekleme süresi canlı dağıtım verisinden gelir.
+  const geo = useCurrentLocation();
+  const { drivers, closestEtaSeconds } = useNearbyDrivers(geo.location);
+  const waitLabel =
+    closestEtaSeconds != null
+      ? `En yakın taksi ${Math.max(1, Math.round(closestEtaSeconds / 60))} dk`
+      : "Yakında taksi aranıyor";
   return (
     <div className="home-page">
       <div className="location-kicker">
@@ -73,18 +82,19 @@ export function HomePage() {
             <Clock3 size={16} />
           </i>
           <span>
-            <strong id="nearby-title">En yakın taksi 2 dk</strong>
-            <small>Tahmini bekleme süresi</small>
+            <strong id="nearby-title">{waitLabel}</strong>
+            <small>
+              {drivers.length ? `${drivers.length} sürücü çevrim içi` : "Tahmini bekleme süresi"}
+            </small>
           </span>
         </div>
         <div className="driver-faces" aria-label="Yakındaki sürücüler">
-          <span>
-            <UserRound />
-          </span>
-          <span>
-            <UserRound />
-          </span>
-          <span>+2</span>
+          {drivers.slice(0, 2).map((driver) => (
+            <span key={driver.id}>
+              <UserRound />
+            </span>
+          ))}
+          {drivers.length > 2 && <span>+{drivers.length - 2}</span>}
         </div>
       </section>
       <section className="recent-rides" aria-labelledby="recent-title">

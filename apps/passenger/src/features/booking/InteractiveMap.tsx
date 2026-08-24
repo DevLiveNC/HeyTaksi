@@ -11,6 +11,8 @@ interface Props {
   destination?: Coordinate | null;
   route?: RouteEstimate | null;
   driverLocation?: { latitude: number; longitude: number } | null | undefined;
+  /** Faz 6: haritada gösterilen canlı boş taksiler (anonim). */
+  nearbyDrivers?: Array<{ id: string; latitude: number; longitude: number; heading: number | null }>;
   onMapClick?: (coordinate: { latitude: number; longitude: number }) => void;
   className?: string;
 }
@@ -19,12 +21,14 @@ export function InteractiveMap({
   destination,
   route,
   driverLocation,
+  nearbyDrivers,
   onMapClick,
   className = "live-map",
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
+  const nearbyMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
   useEffect(() => {
     if (!container.current) return;
     const map = new maplibregl.Map({
@@ -47,8 +51,38 @@ export function InteractiveMap({
     return () => {
       map.remove();
       mapRef.current = null;
+      nearbyMarkers.current.clear();
     };
   }, []);
+
+  // Canlı boş taksiler: marker'lar kimliğe göre yeniden kullanılır, konum akıcı güncellenir.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const seen = new Set<string>();
+    for (const driver of nearbyDrivers ?? []) {
+      seen.add(driver.id);
+      const existing = nearbyMarkers.current.get(driver.id);
+      if (existing) {
+        existing.setLngLat([driver.longitude, driver.latitude]);
+        (existing.getElement() as HTMLElement).style.rotate = `${driver.heading ?? 0}deg`;
+        continue;
+      }
+      const element = document.createElement("div");
+      element.className = "live-marker nearby-taxi";
+      element.setAttribute("aria-label", "Yakındaki boş taksi");
+      element.style.rotate = `${driver.heading ?? 0}deg`;
+      nearbyMarkers.current.set(
+        driver.id,
+        new maplibregl.Marker({ element }).setLngLat([driver.longitude, driver.latitude]).addTo(map),
+      );
+    }
+    for (const [id, marker] of nearbyMarkers.current)
+      if (!seen.has(id)) {
+        marker.remove();
+        nearbyMarkers.current.delete(id);
+      }
+  }, [nearbyDrivers]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;

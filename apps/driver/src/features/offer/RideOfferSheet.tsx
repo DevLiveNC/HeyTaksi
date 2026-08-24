@@ -4,25 +4,26 @@ import { OFFER_SECONDS, useDriver } from "../../state/DriverContext";
 
 /** Yeni yolculuk isteği: kabul penceresi içinde bilgi kartı + kabul/ret. */
 export function RideOfferSheet() {
-  const { ride, offerArrivedAt, acceptOffer, rejectOffer, busy, error } = useDriver();
+  const { ride, offerArrivedAt, offerExpiresAt, acceptOffer, rejectOffer, busy, error } = useDriver();
   const [remaining, setRemaining] = useState(OFFER_SECONDS);
 
+  // Geri sayım sunucunun bildirdiği bitiş zamanına göre yapılır; saat kayması olmaz.
   useEffect(() => {
     if (!ride) return;
-    const startedAt = offerArrivedAt ?? Date.now();
-    const tick = () => setRemaining(Math.max(0, OFFER_SECONDS - Math.floor((Date.now() - startedAt) / 1000)));
+    const deadline = offerExpiresAt
+      ? new Date(offerExpiresAt).getTime()
+      : (offerArrivedAt ?? Date.now()) + OFFER_SECONDS * 1000;
+    const tick = () => setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
     tick();
     const timer = window.setInterval(tick, 500);
     return () => window.clearInterval(timer);
-  }, [ride?.id, offerArrivedAt]);
+  }, [ride?.id, offerArrivedAt, offerExpiresAt]);
 
-  // Süre dolunca teklif otomatik reddedilir; sunucu da atamayı geri alır.
-  useEffect(() => {
-    if (remaining === 0 && !busy) void rejectOffer("other");
-  }, [remaining, busy, rejectOffer]);
-
+  // Süre dolduğunda sunucu teklifi zaten kapatır ve sıradaki sürücüye geçer;
+  // istemci yalnızca kartı gizler, gereksiz istek göndermez.
   if (!ride || ride.status !== "driver_assigned") return null;
-  const progress = (remaining / OFFER_SECONDS) * 100;
+  const progress = Math.min(100, (remaining / OFFER_SECONDS) * 100);
+  const pickupEta = ride.pickupEtaSeconds ? Math.max(1, Math.round(ride.pickupEtaSeconds / 60)) : null;
 
   return (
     <div className="offer-overlay" role="dialog" aria-modal="true" aria-label="Yeni yolculuk isteği">
@@ -65,8 +66,12 @@ export function RideOfferSheet() {
         </div>
         <div className="offer-stats">
           <div>
-            <small>Mesafe</small>
-            <strong>{(ride.distanceMeters / 1000).toFixed(1)} km</strong>
+            <small>{pickupEta ? "Alışa uzaklık" : "Mesafe"}</small>
+            <strong>
+              {pickupEta
+                ? `${pickupEta} dk · ${((ride.pickupDistanceMeters ?? 0) / 1000).toFixed(1)} km`
+                : `${(ride.distanceMeters / 1000).toFixed(1)} km`}
+            </strong>
           </div>
           <div>
             <small>Tahmini süre</small>
@@ -87,7 +92,7 @@ export function RideOfferSheet() {
           </button>
         </div>
         <p className="offer-note">
-          <Timer size={12} /> Süre dolarsa istek otomatik olarak reddedilir.
+          <Timer size={12} /> Süre dolarsa istek sıradaki sürücüye iletilir.
         </p>
       </div>
     </div>

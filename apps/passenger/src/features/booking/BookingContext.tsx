@@ -5,7 +5,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import type { Coordinate, RouteEstimate, VehicleType } from "@heytaksi/shared";
+import type { Coordinate, DispatchStatusView, RouteEstimate, VehicleType } from "@heytaksi/shared";
 export interface ActiveRide {
   id: string;
   status: string;
@@ -20,7 +20,9 @@ export interface ActiveRide {
   driverName?: string | null;
   vehicle?: string | null;
   plate?: string | null;
-  driverLocation?: { latitude: number; longitude: number; heading?: number };
+  driverLocation?: { latitude: number; longitude: number; heading?: number | null };
+  /** Faz 6: sunucudan gelen canlı dağıtım arama durumu. */
+  dispatch?: DispatchStatusView | null;
 }
 interface BookingValue {
   pickup: Coordinate | null;

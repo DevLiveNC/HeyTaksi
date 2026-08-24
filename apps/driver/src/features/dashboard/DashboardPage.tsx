@@ -18,10 +18,11 @@ import { RideOfferSheet } from "../offer/RideOfferSheet";
 const demandLabels = { high: "Yoğun", medium: "Artan", low: "Sakin" } as const;
 
 export function DashboardPage() {
-  const { dashboard, ride, error, setAvailability, busy } = useDriver();
+  const { dashboard, ride, error, setAvailability, busy, socket } = useDriver();
   const availability = dashboard?.availability ?? "offline";
   const onDuty = availability !== "offline";
-  const { location } = useDriverLocation(onDuty);
+  // Konum sinyali açık soket üzerinden gider; soket kapalıysa REST'e düşer.
+  const { location } = useDriverLocation(onDuty, socket, ride?.id ?? null);
   const offerPending = ride?.status === "driver_assigned";
 
   if (!dashboard)

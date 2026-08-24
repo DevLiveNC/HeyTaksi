@@ -26,6 +26,10 @@ export const OFFER_SECONDS = 20;
 interface DriverContextValue {
   dashboard: DriverDashboard | null;
   ride: DriverRideDetail | null;
+  /** Realtime bağlantısı; konum sinyali bu soket üzerinden gönderilir. */
+  socket: DriverSocket | null;
+  /** Sunucunun bildirdiği teklif bitiş zamanı (ISO); geri sayım buna göre yapılır. */
+  offerExpiresAt: string | null;
   messages: RideMessage[];
   connection: "connecting" | "live" | "offline";
   busy: boolean;
@@ -56,6 +60,8 @@ export function DriverProvider({ children }: PropsWithChildren) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offerArrivedAt, setOfferArrivedAt] = useState<number | null>(null);
+  const [offerExpiresAt, setOfferExpiresAt] = useState<string | null>(null);
+  const [socket, setSocket] = useState<DriverSocket | null>(null);
   const fetcherRef = useRef(authorizedFetch);
   fetcherRef.current = authorizedFetch;
 
@@ -72,8 +78,11 @@ export function DriverProvider({ children }: PropsWithChildren) {
     try {
       const next = await driverApi.currentRide(fetcherRef.current);
       setRide((current) => {
-        if (next?.status === "driver_assigned" && current?.id !== next.id)
+        if (next?.status === "driver_assigned" && current?.id !== next.id) {
           setOfferArrivedAt(Date.now());
+          setOfferExpiresAt(next.offerExpiresAt ?? null);
+        }
+        if (!next) setOfferExpiresAt(null);
         return next;
       });
     } catch {
@@ -101,7 +110,14 @@ export function DriverProvider({ children }: PropsWithChildren) {
             if (offer) {
               setRide(offer);
               setOfferArrivedAt(Date.now());
+              setOfferExpiresAt((detail.expiresAt as string) ?? offer.offerExpiresAt ?? null);
             }
+            void refreshDashboard();
+          } else if (event === "ride.offer.closed") {
+            // Teklif reddedildi, süresi doldu veya iptal edildi: ekranı temizle.
+            setRide((current) => (current?.status === "driver_assigned" ? null : current));
+            setOfferArrivedAt(null);
+            setOfferExpiresAt(null);
             void refreshDashboard();
           } else if (event === "driver.updated") {
             setDashboard((current) =>
@@ -135,9 +151,11 @@ export function DriverProvider({ children }: PropsWithChildren) {
       },
     );
     socketRef.current = socket;
+    setSocket(socket);
     return () => {
       socket.close();
       socketRef.current = null;
+      setSocket(null);
     };
   }, [accessToken, user, refreshDashboard, refreshRide]);
 
@@ -295,6 +313,8 @@ export function DriverProvider({ children }: PropsWithChildren) {
     () => ({
       dashboard,
       ride,
+      socket,
+      offerExpiresAt,
       messages,
       connection,
       busy,
@@ -314,10 +334,11 @@ export function DriverProvider({ children }: PropsWithChildren) {
       dismissRide: () => {
         setRide(null);
         setOfferArrivedAt(null);
+        setOfferExpiresAt(null);
       },
     }),
     [
-      dashboard, ride, messages, connection, busy, error, offerArrivedAt,
+      dashboard, ride, socket, offerExpiresAt, messages, connection, busy, error, offerArrivedAt,
       refreshDashboard, refreshRide, setAvailability, acceptOffer, rejectOffer,
       advance, startRide, cancelRide, sendMessage, markPassengerRated,
     ],

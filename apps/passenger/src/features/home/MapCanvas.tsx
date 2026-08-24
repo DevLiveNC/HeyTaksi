@@ -3,36 +3,22 @@ import { useEffect } from "react";
 import { InteractiveMap } from "../booking/InteractiveMap";
 import { useBooking } from "../booking/BookingContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
-import { usePassengerExperience } from "../../state/PassengerExperience";
+import { useNearbyDrivers } from "../../hooks/useNearbyDrivers";
+
 export function MapCanvas() {
-  const { state } = usePassengerExperience();
   const booking = useBooking();
   const geo = useCurrentLocation();
+  // Faz 6: haritadaki taksiler artık Redis konum defterinden gelen canlı sürücülerdir.
+  const { drivers, closestEtaSeconds, loading } = useNearbyDrivers(geo.location);
+
   useEffect(() => {
     if (!geo.isFallback || !booking.pickup) booking.setPickup(geo.location);
   }, [geo.location, geo.isFallback]);
+
   return (
     <section className="map-card real" aria-label="Canlı konum haritası">
-      <InteractiveMap pickup={geo.location} className="home-live-map" />
-      {state.nearbyTaxis.map((taxi) => (
-        <span
-          className="taxi-marker live-taxi"
-          key={taxi.id}
-          style={{
-            left: `${taxi.x}%`,
-            top: `${taxi.y}%`,
-            transform: `rotate(${taxi.rotation}deg)`,
-          }}
-          aria-label={`${taxi.eta} dakika uzaklıkta taksi`}
-        >
-          ▰
-        </span>
-      ))}
-      <button
-        className="locate-button"
-        onClick={geo.request}
-        aria-label="Konumumu bul"
-      >
+      <InteractiveMap pickup={geo.location} nearbyDrivers={drivers} className="home-live-map" />
+      <button className="locate-button" onClick={geo.request} aria-label="Konumumu bul">
         <LocateFixed size={19} />
       </button>
       <div className="map-status">
@@ -41,9 +27,17 @@ export function MapCanvas() {
           <strong>
             {geo.isFallback
               ? "Konum izni gerekli"
-              : `${state.nearbyTaxis.length} taksi yakınında`}
+              : loading
+                ? "Sürücüler aranıyor…"
+                : drivers.length
+                  ? `${drivers.length} taksi yakınında`
+                  : "Şu anda yakında taksi yok"}
           </strong>
-          {geo.loading ? "Konum bulunuyor…" : geo.location.address}
+          {geo.loading
+            ? "Konum bulunuyor…"
+            : closestEtaSeconds != null
+              ? `En yakını ${Math.max(1, Math.round(closestEtaSeconds / 60))} dk uzaklıkta`
+              : geo.location.address}
         </span>
       </div>
     </section>

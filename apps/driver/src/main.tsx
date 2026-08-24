@@ -7,4 +7,4 @@ import { App } from './routes/App';
 import { apiBaseUrl } from './services/config';
 import '../../passenger/src/styles/global.css';
 import './styles/driver.css';
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl}><BrowserRouter><App /></BrowserRouter></AuthProvider></React.StrictMode>);
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl} storageKey="heytaksi.driver.session"><BrowserRouter><App /></BrowserRouter></AuthProvider></React.StrictMode>);

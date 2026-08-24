@@ -7,4 +7,4 @@ import { apiBaseUrl } from './services/config';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/global.css';
 import './styles/phase3.css';
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl}><BrowserRouter><App /></BrowserRouter></AuthProvider></React.StrictMode>);
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl} storageKey="heytaksi.passenger.session"><BrowserRouter><App /></BrowserRouter></AuthProvider></React.StrictMode>);

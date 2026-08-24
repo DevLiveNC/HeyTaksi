@@ -1,22 +1,43 @@
 import { useState, type FormEvent } from 'react';
-import type { Role } from '@heytaksi/shared';
+import { useNavigate } from 'react-router-dom';
+import type { Role, UserIdentity } from '@heytaksi/shared';
 import { useAuth } from './AuthContext';
 
 type View = 'login' | 'register' | 'phone' | 'otp';
-export function AuthPage({ audience, allowedRole }: { audience: string; allowedRole: 'passenger' | 'driver' | 'admin' }) {
+type AuthPageProps = {
+  audience: string;
+  allowedRole: 'passenger' | 'driver' | 'admin';
+  /** Roles that may enter this application. Defaults to the role used for registration. */
+  allowedRoles?: Role[];
+  /** The first application page to open after a successful sign-in. */
+  redirectTo: string;
+};
+
+export function AuthPage({ audience, allowedRole, allowedRoles, redirectTo }: AuthPageProps) {
   const auth = useAuth();
+  const navigate = useNavigate();
   const [view, setView] = useState<View>('login');
   const [error, setError] = useState('');
   const [phone, setPhone] = useState('');
   const [otpPurpose, setOtpPurpose] = useState<'login' | 'register'>('login');
+  const completeSignIn = async (user: UserIdentity) => {
+    const permittedRoles = allowedRoles ?? [allowedRole];
+    if (!permittedRoles.includes(user.role)) {
+      // A valid account in a different portal used to leave users on the login
+      // screen with no explanation. Do not retain that portal's session either.
+      await auth.logout();
+      throw new Error(`Bu hesap ${audience} uygulamasına erişemez.`);
+    }
+    navigate(redirectTo, { replace: true });
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError('');
     const data = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      if (view === 'login') await auth.emailLogin(String(data.email), String(data.password));
-      if (view === 'register') await auth.register({ email: data.email, phone: data.phone || undefined, password: data.password, firstName: data.firstName, lastName: data.lastName, role: allowedRole as Role });
+      if (view === 'login') await completeSignIn(await auth.emailLogin(String(data.email), String(data.password)));
+      if (view === 'register') await completeSignIn(await auth.register({ email: data.email, phone: data.phone || undefined, password: data.password, firstName: data.firstName, lastName: data.lastName, role: allowedRole as Role }));
       if (view === 'phone') { const nextPhone=String(data.phone); const purpose=String(data.purpose) as 'login'|'register'; await auth.requestOtp(nextPhone,purpose); setPhone(nextPhone);setOtpPurpose(purpose);setView('otp'); }
-      if (view === 'otp') await auth.verifyOtp({ phone, purpose: otpPurpose, code: data.code, firstName: data.firstName || undefined, lastName: data.lastName || undefined, role: allowedRole });
+      if (view === 'otp') await completeSignIn(await auth.verifyOtp({ phone, purpose: otpPurpose, code: data.code, firstName: data.firstName || undefined, lastName: data.lastName || undefined, role: allowedRole }));
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'İşlem tamamlanamadı.'); }
   };
   const isAdmin = allowedRole === 'admin';

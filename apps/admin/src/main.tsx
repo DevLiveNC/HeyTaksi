@@ -10,7 +10,7 @@ import './styles/dispatch.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider apiUrl={apiBaseUrl}>
+    <AuthProvider apiUrl={apiBaseUrl} storageKey="heytaksi.admin.session">
       <BrowserRouter>
         <App />
       </BrowserRouter>

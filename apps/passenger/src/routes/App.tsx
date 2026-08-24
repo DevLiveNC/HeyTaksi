@@ -45,7 +45,7 @@ export function App() {
   return (
     <AuthGate
       roles={["passenger"]}
-      fallback={<AuthPage audience="Yolcu" allowedRole="passenger" />}
+      fallback={<AuthPage audience="Yolcu" allowedRole="passenger" redirectTo="/home" />}
     >
       <PassengerApp />
     </AuthGate>

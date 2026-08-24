@@ -4,15 +4,15 @@ import type { DeviceInput, Role, UserIdentity } from '@heytaksi/shared';
 interface Session { user: UserIdentity; accessToken: string; refreshToken: string; }
 interface AuthContextValue {
   user: UserIdentity | null; accessToken: string | null; loading: boolean;
-  emailLogin(email: string, password: string): Promise<void>;
-  register(input: Record<string, unknown>): Promise<void>;
+  emailLogin(email: string, password: string): Promise<UserIdentity>;
+  register(input: Record<string, unknown>): Promise<UserIdentity>;
   requestOtp(phone: string, purpose: 'login' | 'register'): Promise<{ debugCode?: string }>;
-  verifyOtp(input: Record<string, unknown>): Promise<void>;
+  verifyOtp(input: Record<string, unknown>): Promise<UserIdentity>;
   logout(allDevices?: boolean): Promise<void>;
   authorizedFetch(path: string, init?: RequestInit): Promise<Response>;
 }
 const AuthContext = createContext<AuthContextValue | null>(null);
-const storageKey = 'heytaksi.session';
+const defaultStorageKey = 'heytaksi.session';
 const deviceKey = 'heytaksi.device';
 
 function getDevice(): DeviceInput {
@@ -20,12 +20,16 @@ function getDevice(): DeviceInput {
   if (!id) { id = crypto.randomUUID(); localStorage.setItem(deviceKey, id); }
   return { id, name: navigator.userAgent.includes('Mobile') ? 'Mobil web' : 'Web tarayıcı', platform: 'web' };
 }
-function storedSession(): Session | null {
+function storedSession(storageKey: string): Session | null {
   try { return JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Session | null; } catch { return null; }
 }
 
-export function AuthProvider({ apiUrl, children }: PropsWithChildren<{ apiUrl: string }>) {
-  const [session, setSession] = useState<Session | null>(storedSession);
+/**
+ * `storageKey` lets independently deployed applications keep separate sessions
+ * when they share an origin (for example, a single domain behind a reverse proxy).
+ */
+export function AuthProvider({ apiUrl, storageKey = defaultStorageKey, children }: PropsWithChildren<{ apiUrl: string; storageKey?: string }>) {
+  const [session, setSession] = useState<Session | null>(() => storedSession(storageKey));
   const [loading, setLoading] = useState(true);
   const save = (next: Session | null) => {
     setSession(next);
@@ -57,10 +61,22 @@ export function AuthProvider({ apiUrl, children }: PropsWithChildren<{ apiUrl: s
 
   const value = useMemo<AuthContextValue>(() => ({
     user: session?.user ?? null, accessToken: session?.accessToken ?? null, loading,
-    async emailLogin(email, password) { setLoading(true); try { save(await post<Session>('/auth/login', { email, password, device: getDevice() })); } finally { setLoading(false); } },
-    async register(input) { setLoading(true); try { save(await post<Session>('/auth/register', { ...input, device: getDevice() })); } finally { setLoading(false); } },
+    async emailLogin(email, password) {
+      setLoading(true);
+      try { const next = await post<Session>('/auth/login', { email, password, device: getDevice() }); save(next); return next.user; }
+      finally { setLoading(false); }
+    },
+    async register(input) {
+      setLoading(true);
+      try { const next = await post<Session>('/auth/register', { ...input, device: getDevice() }); save(next); return next.user; }
+      finally { setLoading(false); }
+    },
     async requestOtp(phone, purpose) { setLoading(true); try { return await post<{ debugCode?: string }>('/auth/otp/request', { phone, purpose }); } finally { setLoading(false); } },
-    async verifyOtp(input) { setLoading(true); try { save(await post<Session>('/auth/otp/verify', { ...input, device: getDevice() })); } finally { setLoading(false); } },
+    async verifyOtp(input) {
+      setLoading(true);
+      try { const next = await post<Session>('/auth/otp/verify', { ...input, device: getDevice() }); save(next); return next.user; }
+      finally { setLoading(false); }
+    },
     async logout(allDevices = false) {
       if (session) await fetch(`${apiUrl}/auth/logout`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${session.accessToken}` }, body: JSON.stringify({ allDevices }) });
       save(null);

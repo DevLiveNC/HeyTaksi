@@ -126,7 +126,7 @@ export function App() {
   return (
     <AuthGate
       roles={['admin', 'dispatcher', 'support']}
-      fallback={<AuthPage audience="Yönetim ekibi" allowedRole="admin" />}
+      fallback={<AuthPage audience="Yönetim ekibi" allowedRole="admin" allowedRoles={['admin', 'dispatcher', 'support']} redirectTo="/canli-operasyon" />}
     >
       <DispatchProvider>
         <AdminPanel />

@@ -25,7 +25,7 @@ function DriverApp() {
 
 export function App() {
   return (
-    <AuthGate roles={["driver"]} fallback={<AuthPage audience="Sürücü" allowedRole="driver" />}>
+    <AuthGate roles={["driver"]} fallback={<AuthPage audience="Sürücü" allowedRole="driver" redirectTo="/dashboard" />}>
       <DriverApp />
     </AuthGate>
   );

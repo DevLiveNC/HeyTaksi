@@ -20,6 +20,9 @@ export function AuthPage({ audience, allowedRole, allowedRoles, redirectTo }: Au
   const [error, setError] = useState('');
   const [phone, setPhone] = useState('');
   const [otpPurpose, setOtpPurpose] = useState<'login' | 'register'>('login');
+  // Geliştirme ortamında API `debugCode` döndürür (OTP_EXPOSE_CODE=true); SMS sağlayıcısı
+  // olmadığı için kodu ekranda göstermeden telefonla giriş imkânsız oluyordu.
+  const [debugCode, setDebugCode] = useState('');
   const completeSignIn = async (user: UserIdentity) => {
     const permittedRoles = allowedRoles ?? [allowedRole];
     if (!permittedRoles.includes(user.role)) {
@@ -36,7 +39,7 @@ export function AuthPage({ audience, allowedRole, allowedRoles, redirectTo }: Au
     try {
       if (view === 'login') await completeSignIn(await auth.emailLogin(String(data.email), String(data.password)));
       if (view === 'register') await completeSignIn(await auth.register({ email: data.email, phone: data.phone || undefined, password: data.password, firstName: data.firstName, lastName: data.lastName, role: allowedRole as Role }));
-      if (view === 'phone') { const nextPhone=String(data.phone); const purpose=String(data.purpose) as 'login'|'register'; await auth.requestOtp(nextPhone,purpose); setPhone(nextPhone);setOtpPurpose(purpose);setView('otp'); }
+      if (view === 'phone') { const nextPhone=String(data.phone); const purpose=String(data.purpose) as 'login'|'register'; const result=await auth.requestOtp(nextPhone,purpose); setPhone(nextPhone);setOtpPurpose(purpose);setDebugCode(result.debugCode ?? '');setView('otp'); }
       if (view === 'otp') await completeSignIn(await auth.verifyOtp({ phone, purpose: otpPurpose, code: data.code, firstName: data.firstName || undefined, lastName: data.lastName || undefined, role: allowedRole }));
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'İşlem tamamlanamadı.'); }
   };
@@ -45,7 +48,7 @@ export function AuthPage({ audience, allowedRole, allowedRoles, redirectTo }: Au
     {view==='login'&&<><label>E-posta<input name="email" type="email" required placeholder="ornek@heytaksi.com"/></label><label>Şifre<input name="password" type="password" required placeholder="••••••••••"/></label></>}
     {view==='register'&&<><div className="field-row"><label>Ad<input name="firstName" required/></label><label>Soyad<input name="lastName" required/></label></div><label>E-posta<input name="email" type="email" required/></label><label>Telefon <em>opsiyonel</em><input name="phone" placeholder="+905551112233"/></label><label>Şifre<input name="password" type="password" required minLength={10} placeholder="En az 10 karakter"/></label></>}
     {view==='phone'&&<><label>Telefon<input name="phone" required defaultValue="+90"/></label><label>İşlem<select name="purpose"><option value="login">Giriş yap</option>{!isAdmin&&<option value="register">Yeni hesap oluştur</option>}</select></label></>}
-    {view==='otp'&&<><label>Doğrulama kodu<input name="code" inputMode="numeric" maxLength={6} required placeholder="000000"/></label>{otpPurpose==='register'&&<div className="field-row"><label>Ad<input name="firstName" required/></label><label>Soyad<input name="lastName" required/></label></div>}</>}
+    {view==='otp'&&<>{debugCode&&<div className="auth-debug" style={{background:'rgba(34,197,94,.12)',border:'1px solid rgba(34,197,94,.4)',color:'inherit',borderRadius:8,padding:'8px 12px',fontSize:13,marginBottom:12}}>Geliştirme ortamı – SMS yerine kodu aşağıdan okuyabilirsiniz: <strong style={{letterSpacing:2,fontVariantNumeric:'tabular-nums'}}>{debugCode}</strong></div>}<label>Doğrulama kodu<input name="code" inputMode="numeric" maxLength={6} required placeholder="000000"/></label>{otpPurpose==='register'&&<div className="field-row"><label>Ad<input name="firstName" required/></label><label>Soyad<input name="lastName" required/></label></div>}</>}
     {error&&<div className="auth-error">{error}</div>}<button className="primary-action" disabled={auth.loading}>{auth.loading?'Kontrol ediliyor…':'Devam et →'}</button></form>
-    <div className="auth-switch">{!isAdmin&&view==='login'&&<><button onClick={()=>setView('register')}>Hesap oluştur</button><button onClick={()=>setView('phone')}>Telefon / OTP</button></>}{view!=='login'&&<button onClick={()=>setView('login')}>E-posta ile girişe dön</button>}</div></div><footer>256-bit şifreleme · Güvenli oturum · KVKK</footer></section></div>;
+    <div className="auth-switch">{!isAdmin&&view==='login'&&<><button onClick={()=>setView('register')}>Hesap oluştur</button><button onClick={()=>setView('phone')}>Telefon / OTP</button></>}{view!=='login'&&<button onClick={()=>{setView('login');setDebugCode('');}}>E-posta ile girişe dön</button>}</div></div><footer>256-bit şifreleme · Güvenli oturum · KVKK</footer></section></div>;
 }

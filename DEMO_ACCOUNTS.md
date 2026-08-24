@@ -71,7 +71,7 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
     "email": "passenger.demo@heytaksi.com",
     "password": "PassengerDemo2026!",
     "device": {
-      "id": "00000000-0000-0000-0000-000000000001",
+      "id": "6ba7b810-9dad-41d1-80b4-00c04fd430c8",
       "platform": "web"
     }
   }'

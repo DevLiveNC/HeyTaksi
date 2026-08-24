@@ -213,7 +213,7 @@ try {
   }
   console.info('Not: Tüm hesaplar aktif durumda ve giriş yapabilir.');
   console.info('Login endpoint: POST /api/v1/auth/login');
-  console.info('Örnek body: { \"email\": \"...\", \"password\": \"...\", \"device\": { \"id\": \"00000000-0000-0000-0000-000000000001\", \"platform\": \"web\" } }');
+  console.info('Örnek body: { \"email\": \"...\", \"password\": \"...\", \"device\": { \"id\": \"6ba7b810-9dad-41d1-80b4-00c04fd430c8\", \"platform\": \"web\" } }');
 } catch (error) {
   await client.query('ROLLBACK');
   console.error('Demo hesap oluşturma hatası:', error);

@@ -1,5 +1,16 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+
+// npm workspace scriptleri apps/api içinde çalışır; README ise .env'in repo kökünde
+// oluşturulmasını belirtir. Her iki konuma da bakıyoruz (cwd öncelikli, mevcut
+// ortam değişkenleri hiçbir zaman ezilmez).
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+for (const candidate of [path.resolve(process.cwd(), '.env'), path.resolve(configDir, '../../../../.env')]) {
+  if (existsSync(candidate)) dotenv.config({ path: candidate });
+}
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

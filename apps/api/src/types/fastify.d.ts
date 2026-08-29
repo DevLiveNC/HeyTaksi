@@ -1,6 +1,6 @@
 import type { Role, UserIdentity } from '@heytaksi/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 import type { RealtimeHub } from '../infrastructure/realtime/hub.js';
 import type { DriverLocationStore } from '../infrastructure/redis/driver-location.store.js';

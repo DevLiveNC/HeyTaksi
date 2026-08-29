@@ -12,6 +12,13 @@ for (const candidate of [path.resolve(process.cwd(), '.env'), path.resolve(confi
   if (existsSync(candidate)) dotenv.config({ path: candidate });
 }
 
+if (!process.env.DATABASE_URL) {
+  const fromPostgres = process.env.POSTGRES_URL ?? process.env.POSTGRES_PRISMA_URL;
+  if (fromPostgres) process.env.DATABASE_URL = fromPostgres;
+}
+
+const onVercel = process.env.VERCEL === '1';
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('0.0.0.0'),
@@ -19,8 +26,8 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   API_PREFIX: z.string().startsWith('/').default('/api/v1'),
   DATABASE_URL: z.string().min(1).default('postgresql://heytaksi:heytaksi@localhost:5432/heytaksi'),
-  DATABASE_POOL_MIN: z.coerce.number().int().nonnegative().default(2),
-  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(20),
+  DATABASE_POOL_MIN: z.coerce.number().int().nonnegative().default(onVercel ? 0 : 2),
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(onVercel ? 5 : 20),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   JWT_ACCESS_SECRET: z.string().min(32).default('development-access-secret-change-me'),
   JWT_REFRESH_SECRET: z.string().min(32).default('development-refresh-secret-change-me'),
@@ -48,6 +55,7 @@ if (!parsed.success) {
 
 export const env = {
   ...parsed.data,
+  DATABASE_URL: parsed.data.DATABASE_URL.replace(/([?&])channel_binding=require&?/, '$1').replace(/[?&]$/, ''),
   CORS_ORIGINS: parsed.data.CORS_ORIGINS.split(',').map((origin) => origin.trim()),
 };
 export type Environment = typeof env;

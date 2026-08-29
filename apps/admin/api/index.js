@@ -1,6 +1,6 @@
 /**
  * Vercel SPA projects rewrite unknown POST paths to index.html, which returns 405.
- * This function owns `/api/*` so login and other API methods never hit static files.
+ * This function owns `/api` so login and other API methods never hit static files.
  */
 
 const hopByHop = new Set([
@@ -27,6 +27,24 @@ function readBody(request) {
 
 function allowOrigin(origin) {
   return origin && origin !== 'null' ? origin : '*';
+}
+
+function headerValue(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function publicApiUrl(request) {
+  const fromQuery = (() => {
+    const current = request.url ?? '/';
+    const query = current.includes('?') ? current.slice(current.indexOf('?') + 1) : '';
+    return new URLSearchParams(query).get('rest');
+  })();
+  if (fromQuery && fromQuery.startsWith('/api/')) return fromQuery;
+  for (const name of ['x-forwarded-uri', 'x-invoke-path', 'x-vercel-original-path']) {
+    const value = headerValue(request.headers[name]);
+    if (value && value.startsWith('/api/')) return value;
+  }
+  return request.url ?? '/';
 }
 
 export default async function handler(request, response) {
@@ -66,7 +84,7 @@ export default async function handler(request, response) {
 
   const method = request.method ?? 'GET';
   const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(request);
-  const upstream = await fetch(`${apiOrigin}${request.url ?? '/'}`, { method, headers, body, redirect: 'manual' });
+  const upstream = await fetch(`${apiOrigin}${publicApiUrl(request)}`, { method, headers, body, redirect: 'manual' });
 
   response.statusCode = upstream.status;
   upstream.headers.forEach((value, key) => {

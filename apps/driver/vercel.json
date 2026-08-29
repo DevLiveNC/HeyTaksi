@@ -2,6 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "cd ../.. && npm run build --workspace=@heytaksi/shared && npm run build --workspace=@heytaksi/driver",
   "outputDirectory": "dist",
-  "functions": { "api/[...path].js": { "maxDuration": 30 } },
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "functions": { "api/index.js": { "maxDuration": 30 } },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api?rest=/api/:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

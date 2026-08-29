@@ -1,4 +1,7 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+/**
+ * Vercel SPA projects rewrite unknown POST paths to index.html, which returns 405.
+ * This function owns `/api/*` so login and other API methods never hit static files.
+ */
 
 const hopByHop = new Set([
   'connection',
@@ -13,24 +16,20 @@ const hopByHop = new Set([
   'upgrade',
 ]);
 
-function readBody(request: IncomingMessage) {
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
+function readBody(request) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
     request.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
     request.on('end', () => resolve(Buffer.concat(chunks)));
     request.on('error', reject);
   });
 }
 
-function allowOrigin(origin: string | undefined) {
+function allowOrigin(origin) {
   return origin && origin !== 'null' ? origin : '*';
 }
 
-/**
- * Vercel SPA projects rewrite unknown POST paths to index.html, which returns 405.
- * This function owns `/api/*` so login and other API methods never hit static files.
- */
-export default async function handler(request: IncomingMessage, response: ServerResponse) {
+export default async function handler(request, response) {
   const origin = Array.isArray(request.headers.origin) ? request.headers.origin[0] : request.headers.origin;
   if (request.method === 'OPTIONS') {
     const requested = request.headers['access-control-request-headers'];

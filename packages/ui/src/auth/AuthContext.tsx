@@ -29,6 +29,16 @@ function storedSession(storageKey: string): Session | null {
   try { return JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Session | null; } catch { return null; }
 }
 
+function requestHeaders(init?: RequestInit, extra?: Record<string, string>) {
+  const headers = new Headers(init?.headers);
+  for (const [key, value] of Object.entries(extra ?? {})) headers.set(key, value);
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const hasBody = init?.body != null && init.body !== '';
+  if (hasBody && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  else if ((method === 'GET' || method === 'HEAD') && !hasBody) headers.delete('content-type');
+  return headers;
+}
+
 /** HTML/boş gövde (proxy 502, SPA fallback) JSON parse ile sessizce yutulmasın. */
 export async function parseApiJson<T = { data?: unknown; error?: { message?: string } }>(response: Response): Promise<T> {
   const text = await response.text();
@@ -56,7 +66,8 @@ export function AuthProvider({ apiUrl, storageKey = defaultStorageKey, children 
     else localStorage.removeItem(storageKey);
   };
   const post = async <T,>(path: string, body: unknown): Promise<T> => {
-    const response = await fetch(`${apiUrl}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const payloadBody = JSON.stringify(body);
+    const response = await fetch(`${apiUrl}${path}`, { method: 'POST', headers: requestHeaders({ method: 'POST', body: payloadBody }), body: payloadBody });
     const payload = await parseApiJson<{ data?: T; error?: { message?: string } }>(response);
     if (!response.ok) throw new Error(payload.error?.message ?? 'İşlem tamamlanamadı.');
     if (payload.data === undefined) throw new Error('Sunucu oturum bilgisi döndürmedi.');
@@ -98,12 +109,15 @@ export function AuthProvider({ apiUrl, storageKey = defaultStorageKey, children 
       finally { setLoading(false); }
     },
     async logout(allDevices = false) {
-      if (session) await fetch(`${apiUrl}/auth/logout`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${session.accessToken}` }, body: JSON.stringify({ allDevices }) }).catch(() => undefined);
+      if (session) {
+        const payloadBody = JSON.stringify({ allDevices });
+        await fetch(`${apiUrl}/auth/logout`, { method: 'POST', headers: requestHeaders({ method: 'POST', body: payloadBody }, { authorization: `Bearer ${session.accessToken}` }), body: payloadBody }).catch(() => undefined);
+      }
       save(null);
     },
     async authorizedFetch(path, init) {
       if (!session) throw new Error('Oturum bulunamadı.');
-      const execute = (accessToken: string) => fetch(`${apiUrl}${path}`, { ...init, headers: { ...init?.headers, authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' } });
+      const execute = (accessToken: string) => fetch(`${apiUrl}${path}`, { ...init, headers: requestHeaders(init, { authorization: `Bearer ${accessToken}` }) });
       let response = await execute(session.accessToken);
       if (response.status === 401) {
         const next = await rotate(session);

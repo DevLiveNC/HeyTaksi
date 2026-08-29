@@ -9,7 +9,17 @@ Monorepo Vercel'de dört ayrı Project olarak bağlanır. Her Project aynı Git 
 | heytaksi-driver | `apps/driver` | Sürücü web uygulaması |
 | heytaksi-admin | `apps/admin` | Yönetim paneli |
 
-Her dizindeki `vercel.json` build ve SPA rewrite ayarlarını içerir. Frontend Project'lerine `VITE_API_URL=https://<api-domain>/api/v1`, `VITE_WS_URL=wss://<realtime-domain>/ws` ve `VITE_MAP_STYLE_URL=https://<map-provider>/style` eklenir. API Project'ine `.env.example` içindeki server değişkenleri Vercel Environment Variables üzerinden eklenir.
+Her dizindeki `vercel.json` build ve SPA rewrite ayarlarını içerir. Frontend catch-all rewrite `/api` yollarını **hariç tutar**; aksi halde `POST /api/v1/auth/login` statik `index.html`'e düşer ve Vercel **405 Method Not Allowed** döner (yönetim panelinde form + üç demo hesabı = dört giriş isteği).
+
+Frontend Project'lerine:
+
+- `VITE_API_URL=https://<api-domain>/api/v1` (veya boş bırakıp aynı origin `/api/v1` kullanın)
+- `API_ORIGIN=https://<api-domain>` (aynı origin `/api` proxy'si için; `VITE_API_URL` yoksa zorunlu)
+- `VITE_WS_URL=wss://<realtime-domain>/ws`
+- `VITE_MAP_STYLE_URL=https://<map-provider>/style`
+
+API Project'ine `.env.example` içindeki server değişkenleri Vercel Environment Variables üzerinden eklenir. `CORS_ORIGINS` içine frontend origin'lerini yazın; Hey Taksi `*.vercel.app` önizleme/production hostları ayrıca otomatik kabul edilir.
+
 
 ## Neon PostgreSQL
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
 import type { DeviceInput, Role, UserIdentity } from '@heytaksi/shared';
+import { describeAuthFailure, networkFailureMessage } from './auth-errors';
 
 interface Session { user: UserIdentity; accessToken: string; refreshToken: string; }
 interface AuthContextValue {
@@ -48,6 +49,9 @@ export async function parseApiJson<T = { data?: unknown; error?: { message?: str
   }
   try { return JSON.parse(text) as T; }
   catch {
+    if (/function_invocation_failed/i.test(text) || response.status >= 500) {
+      throw new Error(response.ok ? 'Sunucu beklenmeyen bir yanıt döndü.' : networkFailureMessage);
+    }
     throw new Error(response.ok ? 'Sunucu beklenmeyen bir yanıt döndü.' : `İstek başarısız (${response.status}).`);
   }
 }
@@ -67,11 +71,15 @@ export function AuthProvider({ apiUrl, storageKey = defaultStorageKey, children 
   };
   const post = async <T,>(path: string, body: unknown): Promise<T> => {
     const payloadBody = JSON.stringify(body);
-    const response = await fetch(`${apiUrl}${path}`, { method: 'POST', headers: requestHeaders({ method: 'POST', body: payloadBody }), body: payloadBody });
-    const payload = await parseApiJson<{ data?: T; error?: { message?: string } }>(response);
-    if (!response.ok) throw new Error(payload.error?.message ?? 'İşlem tamamlanamadı.');
-    if (payload.data === undefined) throw new Error('Sunucu oturum bilgisi döndürmedi.');
-    return payload.data;
+    try {
+      const response = await fetch(`${apiUrl}${path}`, { method: 'POST', headers: requestHeaders({ method: 'POST', body: payloadBody }), body: payloadBody });
+      const payload = await parseApiJson<{ data?: T; error?: { message?: string } }>(response);
+      if (!response.ok) throw new Error(payload.error?.message ?? 'İşlem tamamlanamadı.');
+      if (payload.data === undefined) throw new Error('Sunucu oturum bilgisi döndürmedi.');
+      return payload.data;
+    } catch (cause) {
+      throw new Error(describeAuthFailure(cause));
+    }
   };
   const rotate = async (current: Session) => post<Session>('/auth/refresh', { refreshToken: current.refreshToken });
 

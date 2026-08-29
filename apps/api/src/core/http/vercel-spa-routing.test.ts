@@ -14,3 +14,24 @@ describe('frontend Vercel SPA routing', () => {
     expect(config.rewrites.some((rule) => rule.source === '/(.*)' && rule.destination === '/index.html')).toBe(false);
   });
 });
+
+describe('SPA API proxy', () => {
+  const sources = (['admin', 'passenger', 'driver'] as const).map((app) => ({
+    app,
+    source: readFileSync(join(repoRoot, 'apps', app, 'api', 'index.js'), 'utf8'),
+  }));
+
+  it('keeps the three frontend proxies identical', () => {
+    expect(sources[0]?.source).toBe(sources[1]?.source);
+    expect(sources[0]?.source).toBe(sources[2]?.source);
+  });
+
+  it.each(sources)('$app strips encoding headers and catches upstream fetch failures', ({ source }) => {
+    expect(source).toMatch(/content-encoding/);
+    expect(source).toMatch(/accept-encoding/);
+    expect(source).toMatch(/duplex/);
+    expect(source).toMatch(/API_UNREACHABLE/);
+    expect(source).toMatch(/try \{/);
+    expect(source).toMatch(/catch \{/);
+  });
+});

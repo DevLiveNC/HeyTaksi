@@ -5,9 +5,10 @@ import {
   MapPinned,
   WalletCards,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@heytaksi/ui";
-import { usePassengerExperience } from "../state/PassengerExperience";
+import { passengerApi } from "../services/passengerApi";
 
 const navItems = [
   { to: "/home", label: "Ana Sayfa", icon: House },
@@ -16,11 +17,22 @@ const navItems = [
   { to: "/profile", label: "Profil", icon: CircleUserRound },
 ];
 export function PassengerLayout() {
-  const { user } = useAuth();
-  const { state } = usePassengerExperience();
+  const { user, authorizedFetch } = useAuth();
   const location = useLocation();
-  const unread = state.notifications.filter((item) => !item.read).length;
+  const [unread, setUnread] = useState(0);
   const showHeader = location.pathname === "/home";
+  useEffect(() => {
+    let alive = true;
+    passengerApi
+      .notifications(authorizedFetch)
+      .then((items) => {
+        if (alive) setUnread(items.filter((item) => !item.read).length);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [authorizedFetch, location.pathname]);
   return (
     <div className="passenger-app">
       {showHeader && (
@@ -34,11 +46,7 @@ export function PassengerLayout() {
               <strong>{user?.email?.split("@")[0] ?? "Yolcu"}</strong>
             </div>
           </div>
-          <NavLink
-            to="/notifications"
-            className="icon-button"
-            aria-label={`${unread} okunmamış bildirim`}
-          >
+          <NavLink to="/notifications" className="icon-button" aria-label={`${unread} okunmamış bildirim`}>
             <Bell size={20} />
             {unread > 0 && <b>{unread}</b>}
           </NavLink>

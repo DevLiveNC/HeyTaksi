@@ -225,6 +225,113 @@ export interface RideContact {
   safetyNotes: string[];
 }
 
+export const rideHistoryFilters = ['all', 'completed', 'cancelled', 'upcoming'] as const;
+export type RideHistoryFilter = (typeof rideHistoryFilters)[number];
+export const rideHistoryQuerySchema = z.object({
+  status: z.enum(rideHistoryFilters).default('all'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type RideHistoryQuery = z.infer<typeof rideHistoryQuerySchema>;
+
+export interface RideHistoryItem {
+  id: string;
+  status: RideStatus;
+  vehicleType: VehicleType;
+  pickupAddress: string;
+  destinationAddress: string;
+  pickup: Coordinate;
+  destination: Coordinate;
+  distanceMeters: number;
+  durationSeconds: number;
+  estimatedFare: number;
+  finalFare: number | null;
+  geometry: RouteEstimate['geometry'] | null;
+  driverName: string | null;
+  vehicle: string | null;
+  plate: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface UserNotification {
+  id: string;
+  title: string;
+  body: string;
+  rideId: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export const paymentBrands = ['visa', 'mastercard', 'amex', 'troy'] as const;
+export type PaymentBrand = (typeof paymentBrands)[number];
+export const walletTopupSchema = z.object({
+  amount: z.number().min(50).max(5000),
+  methodId: z.uuid().optional(),
+});
+export const paymentMethodCreateSchema = z.object({
+  brand: z.enum(paymentBrands),
+  last4: z.string().regex(/^\d{4}$/),
+  holderName: z.string().trim().min(2).max(80),
+  expMonth: z.number().int().min(1).max(12),
+  expYear: z.number().int().min(new Date().getFullYear()).max(2040),
+  isDefault: z.boolean().optional(),
+});
+export type WalletTopupInput = z.infer<typeof walletTopupSchema>;
+export type PaymentMethodCreateInput = z.infer<typeof paymentMethodCreateSchema>;
+
+export interface PaymentMethod {
+  id: string;
+  brand: PaymentBrand | string;
+  last4: string;
+  holderName: string;
+  expMonth: number;
+  expYear: number;
+  isDefault: boolean;
+  createdAt: string;
+}
+export interface WalletTransaction {
+  id: string;
+  type: 'topup' | 'ride_charge' | 'refund' | 'adjustment';
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  rideId: string | null;
+  createdAt: string;
+}
+export interface WalletView {
+  balance: number;
+  currency: string;
+  methods: PaymentMethod[];
+  transactions: WalletTransaction[];
+}
+
+export const supportTicketCreateSchema = z.object({
+  subject: z.string().trim().min(4).max(200),
+  message: z.string().trim().min(8).max(4000),
+  rideId: z.uuid().optional(),
+});
+export const supportTicketStatusSchema = z.enum(['open', 'in_progress', 'resolved', 'closed']);
+export type SupportTicketStatus = z.infer<typeof supportTicketStatusSchema>;
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  rideId: string | null;
+  subject: string;
+  message: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const adminPageSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: z.string().trim().max(80).optional(),
+});
+
 export const websocketEvents = {
   CONNECTION_READY: 'connection.ready', AUTH: 'auth', AUTHENTICATED: 'authenticated',
   RIDE_SUBSCRIBE: 'ride.subscribe', RIDE_SUBSCRIBED: 'ride.subscribed', RIDE_UPDATED: 'ride.updated',

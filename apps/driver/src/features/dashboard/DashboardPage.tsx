@@ -23,7 +23,7 @@ export function DashboardPage() {
   const onDuty = availability !== "offline";
   // Konum sinyali açık soket üzerinden gider; soket kapalıysa REST'e düşer.
   const { location } = useDriverLocation(onDuty, socket, ride?.id ?? null);
-  const offerPending = ride?.status === "driver_assigned";
+  const offerPending = Boolean(ride?.offerId);
 
   if (!dashboard)
     return (

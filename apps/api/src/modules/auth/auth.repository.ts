@@ -41,6 +41,7 @@ export class AuthRepository {
       );
       const id = inserted.rows[0]!.id;
       await client.query('INSERT INTO user_profiles(user_id) VALUES ($1)', [id]);
+      await client.query('INSERT INTO wallets(user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', [id]);
       if (input.role === 'driver') await client.query('INSERT INTO drivers(user_id) VALUES ($1)', [id]);
       await client.query('COMMIT');
       return (await this.findById(id))!;

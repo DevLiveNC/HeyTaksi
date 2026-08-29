@@ -9,42 +9,69 @@ import {
   Star,
   UserRound,
 } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@heytaksi/ui";
+import type { RideHistoryItem } from "@heytaksi/shared";
 const MapCanvas = lazy(() => import("./MapCanvas").then((module) => ({ default: module.MapCanvas })));
-import {
-  usePassengerExperience,
-  type Address,
-} from "../../state/PassengerExperience";
+import { usePassengerExperience, type Address } from "../../state/PassengerExperience";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
 import { useNearbyDrivers } from "../../hooks/useNearbyDrivers";
+import { rideApi } from "../../services/rideApi";
 
 const addressIcon = (type: Address["type"]) =>
-  type === "home" ? (
-    <Home />
-  ) : type === "work" ? (
-    <BriefcaseBusiness />
-  ) : (
-    <Star />
-  );
+  type === "home" ? <Home /> : type === "work" ? <BriefcaseBusiness /> : <Star />;
+
+const formatWhen = (value: string) =>
+  new Date(value).toLocaleString("tr-TR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
 export function HomePage() {
-  const { state } = usePassengerExperience();
+  const { addresses } = usePassengerExperience();
   const navigate = useNavigate();
-  // Faz 6: yakındaki sürücü sayısı ve bekleme süresi canlı dağıtım verisinden gelir.
+  const auth = useAuth();
   const geo = useCurrentLocation();
   const { drivers, closestEtaSeconds } = useNearbyDrivers(geo.location);
+  const [rides, setRides] = useState<RideHistoryItem[]>([]);
+  const [active, setActive] = useState<RideHistoryItem | null>(null);
   const waitLabel =
     closestEtaSeconds != null
       ? `En yakın taksi ${Math.max(1, Math.round(closestEtaSeconds / 60))} dk`
       : "Yakında taksi aranıyor";
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([rideApi.list(auth.authorizedFetch, { limit: 4 }), rideApi.current(auth.authorizedFetch)])
+      .then(([history, current]) => {
+        if (!alive) return;
+        setRides(history);
+        setActive(current);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [auth.authorizedFetch]);
+
   return (
     <div className="home-page">
       <div className="location-kicker">
         <MapPin size={13} />
         <span>Mevcut konum</span>
-        <strong>{state.currentLocation}</strong>
+        <strong>{geo.location.address}</strong>
       </div>
-      <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}><MapCanvas /></Suspense>
+      <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}>
+        <MapCanvas />
+      </Suspense>
+      {active && !["completed", "cancelled"].includes(active.status) && (
+        <Link to={`/ride/${active.id}`} className="home-active-ride">
+          <Clock3 size={16} />
+          <span>
+            <strong>Aktif yolculuğun var</strong>
+            <small>{active.pickupAddress} → {active.destinationAddress}</small>
+          </span>
+          <ArrowRight size={16} />
+        </Link>
+      )}
       <button className="destination-box" onClick={() => navigate("/search")}>
         <span className="search-dot" />
         <span>
@@ -62,12 +89,10 @@ export function HomePage() {
           <Link to="/profile/favorites">Düzenle</Link>
         </div>
         <div className="address-grid">
-          {state.addresses.slice(0, 3).map((address) => (
+          {addresses.slice(0, 3).map((address) => (
             <button
               key={address.id}
-              onClick={() =>
-                navigate("/search", { state: { destination: address.address } })
-              }
+              onClick={() => navigate("/search", { state: { destination: address.address } })}
             >
               <i>{addressIcon(address.type)}</i>
               <strong>{address.label}</strong>
@@ -83,9 +108,7 @@ export function HomePage() {
           </i>
           <span>
             <strong id="nearby-title">{waitLabel}</strong>
-            <small>
-              {drivers.length ? `${drivers.length} sürücü çevrim içi` : "Tahmini bekleme süresi"}
-            </small>
+            <small>{drivers.length ? `${drivers.length} sürücü çevrim içi` : "Tahmini bekleme süresi"}</small>
           </span>
         </div>
         <div className="driver-faces" aria-label="Yakındaki sürücüler">
@@ -107,23 +130,22 @@ export function HomePage() {
             Tümünü gör <ChevronRight size={14} />
           </Link>
         </div>
-        {state.rides.slice(0, 2).map((ride) => (
+        {rides.slice(0, 2).map((ride) => (
           <Link to={`/rides/${ride.id}`} className="compact-ride" key={ride.id}>
             <div className="ride-route-line">
               <i />
               <i />
             </div>
             <div>
-              <strong>{ride.to}</strong>
-              <span>{ride.from}</span>
-              <small>
-                {ride.date} · {ride.time}
-              </small>
+              <strong>{ride.destinationAddress}</strong>
+              <span>{ride.pickupAddress}</span>
+              <small>{formatWhen(ride.createdAt)}</small>
             </div>
-            <b>₺{ride.fare.toFixed(2)}</b>
+            <b>₺{Number(ride.finalFare ?? ride.estimatedFare).toFixed(2)}</b>
             <ArrowRight size={16} />
           </Link>
         ))}
+        {rides.length === 0 && <p className="empty-hint">Henüz yolculuk yok. Haritadan taksi çağırabilirsin.</p>}
       </section>
     </div>
   );

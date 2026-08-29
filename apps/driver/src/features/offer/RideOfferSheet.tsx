@@ -1,9 +1,11 @@
 import { Check, Flag, MapPin, Star, Timer, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { OFFER_SECONDS, useDriver } from "../../state/DriverContext";
 
 /** Yeni yolculuk isteği: kabul penceresi içinde bilgi kartı + kabul/ret. */
 export function RideOfferSheet() {
+  const navigate = useNavigate();
   const { ride, offerArrivedAt, offerExpiresAt, acceptOffer, rejectOffer, busy, error } = useDriver();
   const [remaining, setRemaining] = useState(OFFER_SECONDS);
 
@@ -21,7 +23,7 @@ export function RideOfferSheet() {
 
   // Süre dolduğunda sunucu teklifi zaten kapatır ve sıradaki sürücüye geçer;
   // istemci yalnızca kartı gizler, gereksiz istek göndermez.
-  if (!ride || ride.status !== "driver_assigned") return null;
+  if (!ride?.offerId) return null;
   const progress = Math.min(100, (remaining / OFFER_SECONDS) * 100);
   const pickupEta = ride.pickupEtaSeconds ? Math.max(1, Math.round(ride.pickupEtaSeconds / 60)) : null;
 
@@ -87,7 +89,7 @@ export function RideOfferSheet() {
           <button className="reject" onClick={() => void rejectOffer()} disabled={busy}>
             <X size={18} /> Reddet
           </button>
-          <button className="accept" onClick={() => void acceptOffer()} disabled={busy}>
+          <button className="accept" onClick={() => void acceptOffer().then((ok) => { if (ok) navigate("/ride"); })} disabled={busy}>
             <Check size={18} /> Kabul et
           </button>
         </div>

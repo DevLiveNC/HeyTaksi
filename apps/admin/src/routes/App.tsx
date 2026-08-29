@@ -2,9 +2,15 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate, AuthPage, useAuth } from '@heytaksi/ui';
 import { DispatchProvider, useDispatch } from '../state/DispatchContext';
 import { DispatchPage } from '../features/dispatch/DispatchPage';
+import { AdminDriversPage, AdminPassengersPage, AdminRidesPage, AdminSupportPage, AdminVehiclesPage } from '../features/ops/ListPages';
 
-const modules = ['Yolculuklar', 'Sürücüler', 'Yolcular', 'Araçlar', 'Destek'];
-const slug = (name: string) => '/' + name.toLocaleLowerCase('tr-TR').replace('ı', 'i').replace('ü', 'u');
+const modules = [
+  { name: 'Yolculuklar', path: '/rides' },
+  { name: 'Sürücüler', path: '/drivers' },
+  { name: 'Yolcular', path: '/passengers' },
+  { name: 'Araçlar', path: '/vehicles' },
+  { name: 'Destek', path: '/support' },
+];
 
 function Overview() {
   const { counts, drivers, rides, connection } = useDispatch();
@@ -43,7 +49,7 @@ function Overview() {
           <p>Yetkiye göre erişilen operasyon alanları</p>
         </div>
         <div className="module-list">
-          {['Canlı operasyon', ...modules].map((item, index) => (
+          {['Canlı operasyon', ...modules.map((item) => item.name)].map((item, index) => (
             <article key={item}>
               <span>{String(index + 1).padStart(2, '0')}</span>
               <strong>{item}</strong>
@@ -53,18 +59,6 @@ function Overview() {
         </div>
       </section>
     </>
-  );
-}
-
-function Placeholder({ name }: { name: string }) {
-  return (
-    <header className="page-head">
-      <div>
-        <small>HEY TAKSİ YÖNETİM</small>
-        <h1>{name}</h1>
-        <p>Bu modülün routing ve yetkilendirme alanı hazır.</p>
-      </div>
-    </header>
   );
 }
 
@@ -95,8 +89,8 @@ function AdminPanel() {
             <DispatchBadge />
           </NavLink>
           {modules.map((item) => (
-            <NavLink key={item} to={slug(item)}>
-              □ <span>{item}</span>
+            <NavLink key={item.path} to={item.path}>
+              □ <span>{item.name}</span>
             </NavLink>
           ))}
         </nav>
@@ -112,9 +106,11 @@ function AdminPanel() {
         <Routes>
           <Route path="/overview" element={<Overview />} />
           <Route path="/canli-operasyon" element={<DispatchPage />} />
-          {modules.map((item) => (
-            <Route key={item} path={slug(item)} element={<Placeholder name={item} />} />
-          ))}
+          <Route path="/rides" element={<AdminRidesPage />} />
+          <Route path="/drivers" element={<AdminDriversPage />} />
+          <Route path="/passengers" element={<AdminPassengersPage />} />
+          <Route path="/vehicles" element={<AdminVehiclesPage />} />
+          <Route path="/support" element={<AdminSupportPage />} />
           <Route path="*" element={<Navigate to="/canli-operasyon" replace />} />
         </Routes>
       </main>

@@ -1,3 +1,4 @@
+import { parseApiJson } from "@heytaksi/ui";
 import type {
   DriverAvailabilityTarget,
   DriverDashboard,
@@ -16,9 +17,9 @@ export async function apiData<T>(
   init?: RequestInit,
 ): Promise<T> {
   const response = await authorizedFetch(path, init);
-  const payload = (await response.json()) as { data?: T; error?: { message?: string } };
+  const payload = await parseApiJson<{ data?: T; error?: { message?: string } }>(response);
   if (!response.ok) throw new Error(payload.error?.message ?? "İşlem tamamlanamadı.");
-  return payload.data!;
+  return payload.data as T;
 }
 
 export const driverApi = {

@@ -1,4 +1,5 @@
 export { AppShell } from './AppShell';
 export { EmptyState } from './EmptyState';
-export { AuthProvider, AuthGate, useAuth } from './auth/AuthContext';
+export { ErrorBoundary } from './ErrorBoundary';
+export { AuthProvider, AuthGate, useAuth, parseApiJson } from './auth/AuthContext';
 export { AuthPage } from './auth/AuthPage';

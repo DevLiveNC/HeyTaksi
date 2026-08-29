@@ -152,6 +152,38 @@ try {
     );
 
     // Role özel tablolar
+    if (acc.role === 'passenger') {
+      await client.query(
+        `INSERT INTO wallets(user_id, balance) VALUES($1, 420.50)
+         ON CONFLICT(user_id) DO UPDATE SET balance = GREATEST(wallets.balance, 420.50), updated_at=NOW()`,
+        [userId],
+      );
+      await client.query(
+        `INSERT INTO payment_methods(user_id, brand, last4, holder_name, exp_month, exp_year, is_default)
+         SELECT $1, 'visa', '2086', 'Demo Yolcu', 8, 2028, TRUE
+         WHERE NOT EXISTS (SELECT 1 FROM payment_methods WHERE user_id=$1 AND last4='2086')`,
+        [userId],
+      );
+      await client.query(
+        `INSERT INTO wallet_transactions(user_id, type, amount, balance_after, description)
+         SELECT $1, 'topup', 500, 500, 'Cüzdana yükleme'
+         WHERE NOT EXISTS (SELECT 1 FROM wallet_transactions WHERE user_id=$1)`,
+        [userId],
+      );
+      await client.query(
+        `INSERT INTO user_notifications(user_id, title, body)
+         SELECT $1, 'Hoş geldin', 'Hey Taksi hesabın güvenle hazırlandı.'
+         WHERE NOT EXISTS (SELECT 1 FROM user_notifications WHERE user_id=$1)`,
+        [userId],
+      );
+      await client.query(
+        `INSERT INTO support_tickets(user_id, subject, message, status)
+         SELECT $1, 'Demo destek kaydı', 'Bu kayıt yönetim panelindeki Destek sayfasını doldurmak için oluşturuldu.', 'open'
+         WHERE NOT EXISTS (SELECT 1 FROM support_tickets WHERE user_id=$1)`,
+        [userId],
+      );
+    }
+
     if (acc.role === 'driver') {
       await client.query(
         `INSERT INTO drivers(user_id, driver_status, rating, total_rides, acceptance_rate, cancellation_rate, online_status, verification_status, availability)

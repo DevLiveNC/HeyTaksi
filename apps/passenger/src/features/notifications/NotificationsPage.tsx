@@ -1,15 +1,23 @@
-import {
-  ArrowLeft,
-  BellRing,
-  CheckCheck,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, BellRing, CheckCheck, ShieldCheck, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePassengerExperience } from "../../state/PassengerExperience";
+import { useAuth } from "@heytaksi/ui";
+import type { UserNotification } from "@heytaksi/shared";
+import { passengerApi } from "../../services/passengerApi";
+
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const { state, dispatch } = usePassengerExperience();
+  const auth = useAuth();
+  const [items, setItems] = useState<UserNotification[]>([]);
+  const [error, setError] = useState("");
+
+  const load = () =>
+    passengerApi.notifications(auth.authorizedFetch).then(setItems);
+
+  useEffect(() => {
+    void load().catch((cause) => setError(cause instanceof Error ? cause.message : "Bildirimler yüklenemedi"));
+  }, [auth.authorizedFetch]);
+
   return (
     <div className="sub-page notifications-page">
       <header className="sub-header">
@@ -21,32 +29,32 @@ export function NotificationsPage() {
           <h1>Bildirimler</h1>
         </div>
         <button
-          onClick={() => dispatch({ type: "mark-notifications-read" })}
+          onClick={() => void passengerApi.markNotificationsRead(auth.authorizedFetch).then(() => load())}
           aria-label="Tümünü okundu işaretle"
         >
           <CheckCheck />
         </button>
       </header>
+      {error && <div className="booking-error">{error}</div>}
       <div className="notification-list">
-        {state.notifications.map((item, index) => (
+        {items.map((item, index) => (
           <article className={!item.read ? "unread" : ""} key={item.id}>
-            <i>
-              {index === 1 ? (
-                <ShieldCheck />
-              ) : index === 2 ? (
-                <Sparkles />
-              ) : (
-                <BellRing />
-              )}
-            </i>
+            <i>{index === 0 ? <BellRing /> : index === 1 ? <ShieldCheck /> : <Sparkles />}</i>
             <span>
               <strong>{item.title}</strong>
               <p>{item.body}</p>
-              <small>{item.time}</small>
+              <small>{new Date(item.createdAt).toLocaleString("tr-TR")}</small>
             </span>
             {!item.read && <b aria-label="Okunmadı" />}
           </article>
         ))}
+        {items.length === 0 && (
+          <div className="empty-list">
+            <BellRing />
+            <h2>Bildirim yok</h2>
+            <p>Yolculuk güncellemeleri burada görünür.</p>
+          </div>
+        )}
       </div>
     </div>
   );

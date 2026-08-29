@@ -14,9 +14,9 @@ export interface ActiveRide {
   destinationAddress: string;
   distanceMeters: number;
   durationSeconds: number;
-  estimatedFare: string;
-  finalFare?: string | null;
-  geometry: RouteEstimate["geometry"];
+  estimatedFare: string | number;
+  finalFare?: string | number | null;
+  geometry: RouteEstimate["geometry"] | null;
   driverName?: string | null;
   vehicle?: string | null;
   plate?: string | null;

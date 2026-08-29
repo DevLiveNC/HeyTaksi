@@ -7,6 +7,8 @@ import { HomePage } from "../features/home/HomePage";
 import { RidesPage } from "../features/rides/RidesPage";
 import { RideDetailPage } from "../features/rides/RideDetailPage";
 import { WalletPage } from "../features/wallet/WalletPage";
+import { WalletMethodsPage } from "../features/wallet/WalletMethodsPage";
+import { WalletTopupPage } from "../features/wallet/WalletTopupPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { ProfileSettingsPage } from "../features/profile/ProfileSettingsPage";
 import { NotificationsPage } from "../features/notifications/NotificationsPage";
@@ -27,6 +29,8 @@ function PassengerApp() {
             <Route path="/rides" element={<RidesPage />} />
             <Route path="/rides/:rideId" element={<RideDetailPage />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/wallet/methods" element={<WalletMethodsPage />} />
+            <Route path="/wallet/topup" element={<WalletTopupPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/profile/:section" element={<ProfileSettingsPage />} />
           </Route>

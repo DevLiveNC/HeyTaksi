@@ -38,14 +38,14 @@ interface DriverContextValue {
   refreshDashboard(): Promise<void>;
   refreshRide(): Promise<void>;
   clearError(): void;
-  setAvailability(target: DriverAvailabilityTarget): Promise<void>;
-  acceptOffer(): Promise<void>;
-  rejectOffer(reason?: string): Promise<void>;
-  advance(status: RideStatus): Promise<void>;
-  startRide(): Promise<void>;
-  cancelRide(reason: string, note?: string): Promise<void>;
-  sendMessage(body: string): Promise<void>;
-  markPassengerRated(stars: number, comment?: string): Promise<void>;
+  setAvailability(target: DriverAvailabilityTarget): Promise<boolean>;
+  acceptOffer(): Promise<boolean>;
+  rejectOffer(reason?: string): Promise<boolean>;
+  advance(status: RideStatus): Promise<boolean>;
+  startRide(): Promise<boolean>;
+  cancelRide(reason: string, note?: string): Promise<boolean>;
+  sendMessage(body: string): Promise<boolean>;
+  markPassengerRated(stars: number, comment?: string): Promise<boolean>;
   dismissRide(): void;
 }
 
@@ -78,7 +78,7 @@ export function DriverProvider({ children }: PropsWithChildren) {
     try {
       const next = await driverApi.currentRide(fetcherRef.current);
       setRide((current) => {
-        if (next?.status === "driver_assigned" && current?.id !== next.id) {
+        if (next?.offerId && current?.id !== next.id) {
           setOfferArrivedAt(Date.now());
           setOfferExpiresAt(next.offerExpiresAt ?? null);
         }
@@ -115,7 +115,7 @@ export function DriverProvider({ children }: PropsWithChildren) {
             void refreshDashboard();
           } else if (event === "ride.offer.closed") {
             // Teklif reddedildi, süresi doldu veya iptal edildi: ekranı temizle.
-            setRide((current) => (current?.status === "driver_assigned" ? null : current));
+            setRide((current) => (current?.offerId ? null : current));
             setOfferArrivedAt(null);
             setOfferExpiresAt(null);
             void refreshDashboard();
@@ -200,8 +200,10 @@ export function DriverProvider({ children }: PropsWithChildren) {
     setError(null);
     try {
       await action();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "İşlem tamamlanamadı.");
+      return false;
     } finally {
       setBusy(false);
     }

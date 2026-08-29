@@ -2,6 +2,8 @@ import type {
   CreateRideInput,
   DriverRideDetail,
   RideContact,
+  RideHistoryItem,
+  RideHistoryQuery,
   RideMessage,
   RideStatus,
   VehicleType,
@@ -12,12 +14,31 @@ import { AppError } from "../../core/errors/app-error.js";
 const ASSIGNMENT_STALE_SECONDS = 90;
 import { MapService } from "../locations/map.service.js";
 import { maskPhone } from "../../core/utils/phone.js";
+import { createNotification } from "../notifications/index.js";
+import { PaymentService } from "../payments/index.js";
 const multipliers: Record<VehicleType, number> = {
   standard: 1,
   comfort: 1.35,
   xl: 1.6,
   accessible: 1.15,
 };
+
+const RIDE_HISTORY_SELECT = `SELECT r.id,r.status,r.vehicle_type AS "vehicleType",
+  r.pickup_address AS "pickupAddress", r.destination_address AS "destinationAddress",
+  r.created_at AS "createdAt", r.completed_at AS "completedAt",
+  p.distance_meters AS "distanceMeters", p.duration_seconds AS "durationSeconds",
+  p.estimated_fare::float8 AS "estimatedFare", p.final_fare::float8 AS "finalFare",
+  p.route_geometry AS geometry, u.first_name||' '||u.last_name AS "driverName",
+  v.plate, v.brand||' '||v.model AS vehicle,
+  pl.latitude AS "pickupLatitude", pl.longitude AS "pickupLongitude",
+  dl.latitude AS "destinationLatitude", dl.longitude AS "destinationLongitude"
+ FROM rides r
+ JOIN ride_pricing p ON p.ride_id=r.id
+ LEFT JOIN drivers d ON d.id=r.driver_id
+ LEFT JOIN users u ON u.id=d.user_id
+ LEFT JOIN vehicles v ON v.id=r.vehicle_id
+ LEFT JOIN LATERAL (SELECT latitude, longitude FROM ride_locations WHERE ride_id=r.id AND location_type='pickup' ORDER BY recorded_at DESC LIMIT 1) pl ON TRUE
+ LEFT JOIN LATERAL (SELECT latitude, longitude FROM ride_locations WHERE ride_id=r.id AND location_type='destination' ORDER BY recorded_at DESC LIMIT 1) dl ON TRUE`;
 const transitions: Record<RideStatus, RideStatus[]> = {
   searching: ["driver_assigned", "cancelled"],
   driver_assigned: ["driver_arriving", "cancelled"],
@@ -30,7 +51,10 @@ const transitions: Record<RideStatus, RideStatus[]> = {
 };
 export class RideService {
   private maps = new MapService();
-  constructor(private app: FastifyInstance) {}
+  private payments: PaymentService;
+  constructor(private app: FastifyInstance) {
+    this.payments = new PaymentService(app.db);
+  }
   async create(passengerId: string, input: CreateRideInput) {
     const route = await this.maps.route(input.pickup, input.destination);
     const multiplier = multipliers[input.vehicleType];
@@ -85,6 +109,12 @@ export class RideService {
       await client.query("COMMIT");
       const result = await this.get(ride.id, passengerId);
       this.app.realtime.publishRide(ride.id, result);
+      await createNotification(this.app.db, {
+        userId: passengerId,
+        title: "Taksi aranıyor",
+        body: `${input.destination.address} için talebin yakındaki sürücülere iletildi.`,
+        rideId: ride.id,
+      }).catch(() => undefined);
       // Faz 6: talep alınır alınmaz deterministik dağıtım araması başlar.
       await this.app.dispatch.start(ride.id).catch((error) => {
         this.app.log.error({ err: error, rideId: ride.id }, "Dağıtım araması başlatılamadı");
@@ -99,12 +129,28 @@ export class RideService {
   }
   async get(id: string, userId: string) {
     const result = await this.app.db.query(
-      `SELECT r.id,r.status,r.vehicle_type AS "vehicleType",r.pickup_address AS "pickupAddress",r.destination_address AS "destinationAddress",r.created_at AS "createdAt",p.distance_meters AS "distanceMeters",p.duration_seconds AS "durationSeconds",p.estimated_fare AS "estimatedFare",p.final_fare AS "finalFare",p.route_geometry AS geometry,u.first_name||' '||u.last_name AS "driverName",v.plate,v.brand||' '||v.model AS vehicle FROM rides r JOIN ride_pricing p ON p.ride_id=r.id LEFT JOIN drivers d ON d.id=r.driver_id LEFT JOIN users u ON u.id=d.user_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.id=$1 AND (r.passenger_id=$2 OR d.user_id=$2)`,
+      `${RIDE_HISTORY_SELECT} WHERE r.id=$1 AND (r.passenger_id=$2 OR d.user_id=$2)`,
       [id, userId],
     );
     if (!result.rows[0])
       throw new AppError(404, "RIDE_NOT_FOUND", "Yolculuk bulunamadı.");
-    return result.rows[0];
+    return this.mapHistoryRow(result.rows[0]);
+  }
+  async list(userId: string, role: string, query: RideHistoryQuery): Promise<RideHistoryItem[]> {
+    const owner = role === "driver" ? "d.user_id=$1" : "r.passenger_id=$1";
+    const status =
+      query.status === "completed"
+        ? " AND r.status='completed'"
+        : query.status === "cancelled"
+          ? " AND r.status='cancelled'"
+          : query.status === "upcoming"
+            ? " AND r.status NOT IN ('completed','cancelled')"
+            : "";
+    const result = await this.app.db.query(
+      `${RIDE_HISTORY_SELECT} WHERE ${owner}${status} ORDER BY r.created_at DESC LIMIT $2 OFFSET $3`,
+      [userId, query.limit, (query.page - 1) * query.limit],
+    );
+    return result.rows.map((row) => this.mapHistoryRow(row));
   }
   async current(passengerId: string) {
     await this.releaseStaleAssignments();
@@ -363,7 +409,17 @@ export class RideService {
       [rideId, driverUserId],
     );
     this.app.realtime.publishRide(rideId, await this.get(rideId, driverUserId));
-    return this.driverRideDetail(rideId, driverUserId);
+    const accepted = await this.driverRideDetail(rideId, driverUserId);
+    const passenger = await this.app.db.query<{ passenger_id: string }>("SELECT passenger_id FROM rides WHERE id=$1", [rideId]);
+    if (passenger.rows[0]) {
+      await createNotification(this.app.db, {
+        userId: passenger.rows[0].passenger_id,
+        title: "Sürücün bulundu",
+        body: "Sürücün yolculuğu kabul etti ve alış noktasına geliyor.",
+        rideId,
+      }).catch(() => undefined);
+    }
+    return accepted;
   }
   /**
    * Sürücü teklifi reddeder: teklif kapanır ve dağıtım motoru sıradaki sürücüye geçer.
@@ -538,6 +594,15 @@ export class RideService {
         .catch(() => undefined);
     }
     this.app.realtime.publishDispatch("dispatch.ride", { rideId: id, status: "cancelled" });
+    const passenger = await this.app.db.query<{ passenger_id: string }>("SELECT passenger_id FROM rides WHERE id=$1", [id]);
+    if (passenger.rows[0]) {
+      await createNotification(this.app.db, {
+        userId: passenger.rows[0].passenger_id,
+        title: "Yolculuk iptal edildi",
+        body: "Yolculuk talebin iptal edildi. Yeni bir çağrı oluşturabilirsin.",
+        rideId: id,
+      }).catch(() => undefined);
+    }
     return updated;
   }
   async updateDriverLocation(id: string, driverUserId: string, location: { latitude: number; longitude: number; heading?: number | undefined; accuracyMeters?: number | undefined }) {
@@ -562,13 +627,28 @@ export class RideService {
       [id, next, next],
     );
     if (next === "completed") {
-      // Bu fazda tahsilat yok; sözleşme bedeli tahmini ücretle kesinleşir.
+      // Bu fazda tahsilat iç cüzdan defterinden düşülür; yetersiz bakiyede yolculuk yine tamamlanır.
       await this.app.db.query(`UPDATE ride_pricing SET final_fare=estimated_fare WHERE ride_id=$1`, [id]);
       await this.app.db.query(
         `UPDATE drivers SET total_rides=total_rides+1,availability='available',online_status=TRUE,updated_at=NOW()
          WHERE id=(SELECT driver_id FROM rides WHERE id=$1)`,
         [id],
       );
+      const billed = await this.app.db.query<{ passenger_id: string; fare: number; destination: string }>(
+        `SELECT r.passenger_id, COALESCE(p.final_fare, p.estimated_fare)::float8 AS fare, r.destination_address AS destination
+         FROM rides r JOIN ride_pricing p ON p.ride_id=r.id WHERE r.id=$1`,
+        [id],
+      );
+      const bill = billed.rows[0];
+      if (bill) {
+        await this.payments.chargeRide(bill.passenger_id, id, bill.fare, `${bill.destination} yolculuğu`).catch(() => undefined);
+        await createNotification(this.app.db, {
+          userId: bill.passenger_id,
+          title: "Yolculuk tamamlandı",
+          body: `${bill.destination} yolculuğun bitti. Ücret ₺${bill.fare.toFixed(2)}.`,
+          rideId: id,
+        }).catch(() => undefined);
+      }
     }
     await this.app.db.query(
       `INSERT INTO ride_status_history(ride_id,from_status,to_status,changed_by) SELECT $1,$2,$3,u.id FROM drivers d JOIN users u ON u.id=d.user_id JOIN rides r ON r.driver_id=d.id WHERE r.id=$1 AND u.id=$4`,
@@ -589,5 +669,42 @@ export class RideService {
     }
     this.app.realtime.publishDispatch("dispatch.ride", { rideId: id, status: next });
     return updated;
+  }
+
+  private mapHistoryRow(row: Record<string, unknown>): RideHistoryItem {
+    const pickupAddress = String(row.pickupAddress ?? "");
+    const destinationAddress = String(row.destinationAddress ?? "");
+    return {
+      id: String(row.id),
+      status: row.status as RideStatus,
+      vehicleType: row.vehicleType as VehicleType,
+      pickupAddress,
+      destinationAddress,
+      pickup: {
+        latitude: Number(row.pickupLatitude ?? 0),
+        longitude: Number(row.pickupLongitude ?? 0),
+        address: pickupAddress,
+      },
+      destination: {
+        latitude: Number(row.destinationLatitude ?? 0),
+        longitude: Number(row.destinationLongitude ?? 0),
+        address: destinationAddress,
+      },
+      distanceMeters: Number(row.distanceMeters ?? 0),
+      durationSeconds: Number(row.durationSeconds ?? 0),
+      estimatedFare: Number(row.estimatedFare ?? 0),
+      finalFare: row.finalFare == null ? null : Number(row.finalFare),
+      geometry: (row.geometry as RideHistoryItem["geometry"]) ?? null,
+      driverName: (row.driverName as string | null) ?? null,
+      vehicle: (row.vehicle as string | null) ?? null,
+      plate: (row.plate as string | null) ?? null,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt ?? ""),
+      completedAt:
+        row.completedAt == null
+          ? null
+          : row.completedAt instanceof Date
+            ? row.completedAt.toISOString()
+            : String(row.completedAt),
+    };
   }
 }

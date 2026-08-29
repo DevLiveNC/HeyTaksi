@@ -2228,3 +2228,130 @@ input:focus-visible {
     transform: translateX(150%);
   }
 }
+
+.wallet-actions a {
+  border: 0;
+  background: transparent;
+  font-size: 8px;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+  text-align: center;
+}
+.wallet-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+}
+.wallet-form.nested {
+  border: 0;
+  padding: 12px;
+  margin-top: 0;
+}
+.wallet-form label,
+.wallet-form input,
+.wallet-form select,
+.wallet-form textarea {
+  font: inherit;
+  width: 100%;
+}
+.wallet-form input,
+.wallet-form select,
+.wallet-form textarea {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fafafa;
+}
+.wallet-form h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.preset-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.preset-row button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 0;
+  font-weight: 800;
+}
+.preset-row button.active {
+  background: var(--ink);
+  color: #fff;
+}
+.empty-hint {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.5;
+}
+.home-active-ride {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #171717;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+.home-active-ride small,
+.home-active-ride strong {
+  display: block;
+}
+.home-active-ride small {
+  color: #bbb;
+  font-size: 10px;
+}
+.detail-live-map {
+  height: 220px;
+  border-radius: 18px;
+  overflow: hidden;
+}
+.balance-card.compact {
+  padding: 18px;
+}
+.app-error {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 32px;
+}
+.app-error span {
+  width: 48px;
+  height: 48px;
+  margin: auto;
+  border-radius: 14px;
+  background: #ffcf20;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+.app-error button {
+  border: 0;
+  background: #171717;
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-weight: 800;
+}
+.map-fallback {
+  display: grid;
+  place-content: center;
+  min-height: 180px;
+  background: #eceae3;
+  color: #666;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px;
+}

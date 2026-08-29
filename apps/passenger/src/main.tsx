@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from '@heytaksi/ui';
+import { AuthProvider, ErrorBoundary } from '@heytaksi/ui';
 import { App } from './routes/App';
 import { apiBaseUrl } from './services/config';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/global.css';
 import './styles/phase3.css';
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl} storageKey="heytaksi.passenger.session"><BrowserRouter><App /></BrowserRouter></AuthProvider></React.StrictMode>);
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl} storageKey="heytaksi.passenger.session"><BrowserRouter><ErrorBoundary><App /></ErrorBoundary></BrowserRouter></AuthProvider></React.StrictMode>);

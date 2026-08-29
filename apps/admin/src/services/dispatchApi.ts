@@ -1,3 +1,4 @@
+import { parseApiJson } from '@heytaksi/ui';
 import type {
   DispatchCandidate,
   DispatchOfferView,
@@ -9,9 +10,9 @@ export type AuthorizedFetch = (path: string, init?: RequestInit) => Promise<Resp
 
 export async function apiData<T>(fetcher: AuthorizedFetch, path: string, init?: RequestInit): Promise<T> {
   const response = await fetcher(path, init);
-  const payload = (await response.json()) as { data?: T; error?: { message?: string } };
+  const payload = await parseApiJson<{ data?: T; error?: { message?: string } }>(response);
   if (!response.ok) throw new Error(payload.error?.message ?? 'İşlem tamamlanamadı.');
-  return payload.data!;
+  return payload.data as T;
 }
 
 export interface RideDispatchDetail extends DispatchStatusView {

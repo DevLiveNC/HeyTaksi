@@ -1,7 +1,10 @@
+import { parseApiJson } from "@heytaksi/ui";
 import type {
   Coordinate,
   CreateRideInput,
   DispatchStatusView,
+  RideHistoryFilter,
+  RideHistoryItem,
   RouteEstimate,
 } from "@heytaksi/shared";
 export interface SearchResult extends Coordinate {
@@ -14,13 +17,13 @@ export async function apiData<T>(
   init?: RequestInit,
 ): Promise<T> {
   const response = await authorizedFetch(path, init);
-  const payload = (await response.json()) as {
+  const payload = await parseApiJson<{
     data?: T;
     error?: { message?: string };
-  };
+  }>(response);
   if (!response.ok)
     throw new Error(payload.error?.message ?? "İşlem tamamlanamadı.");
-  return payload.data!;
+  return payload.data as T;
 }
 export const locationApi = {
   search: (
@@ -52,22 +55,31 @@ export const locationApi = {
 };
 export const rideApi = {
   create: (fetcher: Parameters<typeof apiData>[0], input: CreateRideInput) =>
-    apiData<Record<string, unknown>>(fetcher, "/rides", {
+    apiData<RideHistoryItem>(fetcher, "/rides", {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  /** Dağıtım aramasının çalıştığını garanti eder ve güncel durumu döndürür (idempotent). */
+  list: (
+    fetcher: Parameters<typeof apiData>[0],
+    query: { status?: RideHistoryFilter; limit?: number; page?: number } = {},
+  ) =>
+    apiData<RideHistoryItem[]>(
+      fetcher,
+      `/rides?status=${query.status ?? "all"}&limit=${query.limit ?? 20}&page=${query.page ?? 1}`,
+    ),
+  current: (fetcher: Parameters<typeof apiData>[0]) =>
+    apiData<RideHistoryItem | null>(fetcher, "/rides/current"),
   match: (fetcher: Parameters<typeof apiData>[0], id: string) =>
     apiData<{
       matched: boolean;
       searching?: boolean;
       dispatch?: DispatchStatusView;
-      ride: Record<string, unknown>;
+      ride: RideHistoryItem;
     }>(fetcher, `/rides/${id}/match`, { method: "POST", body: "{}" }),
   get: (fetcher: Parameters<typeof apiData>[0], id: string) =>
-    apiData<Record<string, unknown>>(fetcher, `/rides/${id}`),
+    apiData<RideHistoryItem>(fetcher, `/rides/${id}`),
   cancel: (fetcher: Parameters<typeof apiData>[0], id: string) =>
-    apiData<Record<string, unknown>>(fetcher, `/rides/${id}/cancel`, {
+    apiData<RideHistoryItem>(fetcher, `/rides/${id}/cancel`, {
       method: "POST",
       body: JSON.stringify({ reason: "changed_mind" }),
     }),

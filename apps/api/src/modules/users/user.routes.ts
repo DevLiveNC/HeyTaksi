@@ -1,8 +1,10 @@
 import { profileUpdateSchema } from '@heytaksi/shared';
+import { z } from 'zod';
 import type { FastifyPluginAsync } from 'fastify';
 import { validate } from '../../core/http/validation.js';
 import { AppError } from '../../core/errors/app-error.js';
 import { AuthRepository } from '../auth/auth.repository.js';
+import { listNotifications, markNotificationsRead } from '../notifications/index.js';
 
 export const userRoutes: FastifyPluginAsync = async (app) => {
   const authRepository = new AuthRepository(app.db);
@@ -35,5 +37,19 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
        FROM devices WHERE user_id=$1 ORDER BY last_seen_at DESC`, [request.user.id],
     );
     return { success: true, data: result.rows };
+  });
+
+  app.get('/me/notifications', { preHandler: app.authenticate }, async (request) => ({
+    success: true,
+    data: await listNotifications(app.db, request.user.id),
+  }));
+  app.patch('/me/notifications/read', { preHandler: app.authenticate }, async (request) => {
+    await markNotificationsRead(app.db, request.user.id);
+    return { success: true, data: { read: true } };
+  });
+  app.patch('/me/notifications/:notificationId/read', { preHandler: app.authenticate }, async (request) => {
+    const { notificationId } = validate(z.object({ notificationId: z.uuid() }), request.params);
+    await markNotificationsRead(app.db, request.user.id, notificationId);
+    return { success: true, data: { read: true } };
   });
 };

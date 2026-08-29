@@ -13,9 +13,11 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@heytaksi/ui";
+import { passengerApi } from "../../services/passengerApi";
+
 interface Profile {
   firstName: string;
   lastName: string;
@@ -24,43 +26,14 @@ interface Profile {
   profileImage: string | null;
 }
 const menu = [
-  {
-    to: "/profile/favorites",
-    icon: MapPinned,
-    label: "Favori adresler",
-    caption: "Ev, iş ve kayıtlı yerler",
-  },
-  {
-    to: "/profile/trusted-contacts",
-    icon: HeartHandshake,
-    label: "Güvenilir kişiler",
-    caption: "Yolculuğunu paylaşacağın kişiler",
-  },
-  {
-    to: "/profile/notifications",
-    icon: BellRing,
-    label: "Bildirim ayarları",
-    caption: "Push, SMS ve e-posta tercihleri",
-  },
+  { to: "/profile/edit", icon: UserRound, label: "Kişisel bilgiler", caption: "Ad, soyad ve iletişim" },
+  { to: "/profile/favorites", icon: MapPinned, label: "Favori adresler", caption: "Ev, iş ve kayıtlı yerler" },
+  { to: "/profile/trusted-contacts", icon: HeartHandshake, label: "Güvenilir kişiler", caption: "Yolculuğunu paylaşacağın kişiler" },
+  { to: "/profile/notifications", icon: BellRing, label: "Bildirim ayarları", caption: "Push, SMS ve e-posta tercihleri" },
   { to: "/profile/language", icon: Languages, label: "Dil", caption: "Türkçe" },
-  {
-    to: "/profile/privacy",
-    icon: ShieldCheck,
-    label: "Gizlilik",
-    caption: "Veri ve izin tercihleri",
-  },
-  {
-    to: "/profile/security",
-    icon: LockKeyhole,
-    label: "Güvenlik",
-    caption: "Oturumlar ve cihazlar",
-  },
-  {
-    to: "/profile/support",
-    icon: CircleHelp,
-    label: "Destek",
-    caption: "Yardım merkezi ve iletişim",
-  },
+  { to: "/profile/privacy", icon: ShieldCheck, label: "Gizlilik", caption: "Veri ve izin tercihleri" },
+  { to: "/profile/security", icon: LockKeyhole, label: "Güvenlik", caption: "Oturumlar ve cihazlar" },
+  { to: "/profile/support", icon: CircleHelp, label: "Destek", caption: "Yardım merkezi ve iletişim" },
 ];
 export function ProfilePage() {
   const auth = useAuth();
@@ -68,19 +41,16 @@ export function ProfilePage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
     let active = true;
-    auth
-      .authorizedFetch("/users/me")
-      .then(async (response) => {
-        if (response.ok) {
-          const payload = (await response.json()) as { data: Profile };
-          if (active) setProfile(payload.data);
-        }
+    passengerApi
+      .profile(auth.authorizedFetch)
+      .then((next) => {
+        if (active) setProfile(next);
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, []);
+  }, [auth.authorizedFetch]);
   const display = profile
     ? `${profile.firstName} ${profile.lastName}`
     : (auth.user?.email?.split("@")[0] ?? "Hey Taksi Yolcusu");
@@ -88,12 +58,7 @@ export function ProfilePage() {
     <div className="sub-page profile-page">
       <header className="profile-hero">
         <div className="large-avatar">
-          {profile?.profileImage ? (
-            <img src={profile.profileImage} alt="" />
-          ) : (
-            <UserRound />
-          )}
-          <button aria-label="Profil fotoğrafını değiştir">+</button>
+          {profile?.profileImage ? <img src={profile.profileImage} alt="" /> : <UserRound />}
         </div>
         <div>
           <span>YOLCU PROFİLİ</span>
@@ -151,24 +116,54 @@ export function ProfilePage() {
       </section>
       {confirmDelete && (
         <div className="modal-backdrop" role="presentation">
-          <div
-            className="confirm-modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-title"
-          >
+          <div className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title">
             <i>
               <Trash2 />
             </i>
             <h2 id="delete-title">Hesabını silmek mi istiyorsun?</h2>
-            <p>
-              Bu işlem için güvenli hesap silme API'si sonraki fazda bağlanacak.
-            </p>
+            <p>Bu işlem için güvenli hesap silme API'si sonraki fazda bağlanacak.</p>
             <button onClick={() => setConfirmDelete(false)}>Vazgeç</button>
             <button disabled>Hesabı kalıcı sil</button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+export function ProfileEditForm({ initial }: { initial: Profile | null }) {
+  const auth = useAuth();
+  const [saved, setSaved] = useState("");
+  const [error, setError] = useState("");
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await passengerApi.updateProfile(auth.authorizedFetch, {
+        firstName: String(data.firstName),
+        lastName: String(data.lastName),
+      });
+      setSaved("Profil güncellendi.");
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Profil kaydedilemedi");
+    }
+  };
+  return (
+    <form className="wallet-form" onSubmit={(event) => void submit(event)}>
+      <div className="field-row">
+        <label>
+          Ad
+          <input name="firstName" required minLength={2} defaultValue={initial?.firstName ?? ""} />
+        </label>
+        <label>
+          Soyad
+          <input name="lastName" required minLength={2} defaultValue={initial?.lastName ?? ""} />
+        </label>
+      </div>
+      {error && <div className="booking-error">{error}</div>}
+      {saved && <p className="empty-hint">{saved}</p>}
+      <button className="request-primary">Kaydet</button>
+    </form>
   );
 }

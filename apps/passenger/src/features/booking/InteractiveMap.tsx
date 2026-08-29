@@ -4,7 +4,7 @@ import type {
   Map as MapInstance,
   MapMouseEvent,
 } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Coordinate, RouteEstimate } from "@heytaksi/shared";
 interface Props {
   pickup?: Coordinate | null;
@@ -29,6 +29,7 @@ export function InteractiveMap({
   const mapRef = useRef<MapInstance | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
   const nearbyMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const [styleFailed, setStyleFailed] = useState(false);
   useEffect(() => {
     if (!container.current) return;
     const map = new maplibregl.Map({
@@ -47,6 +48,7 @@ export function InteractiveMap({
     map.on("click", (event: MapMouseEvent) =>
       onMapClick?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }),
     );
+    map.on("error", () => setStyleFailed(true));
     mapRef.current = map;
     return () => {
       map.remove();
@@ -141,6 +143,13 @@ export function InteractiveMap({
     else map.once("load", update);
   }, [pickup, destination, route, driverLocation]);
   return (
-    <div ref={container} className={className} aria-label="Yolculuk haritası" />
+    <div className={`${className}-wrap`} style={{ position: "relative", minHeight: 160 }}>
+      <div ref={container} className={className} aria-label="Yolculuk haritası" />
+      {styleFailed && (
+        <div className="map-fallback" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          Harita altlığı yüklenemedi. Konum işaretleri görünmeye devam eder.
+        </div>
+      )}
+    </div>
   );
 }

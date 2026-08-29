@@ -1,4 +1,4 @@
-import { createRideSchema, driverCancelReasons, passengerCancelReasons, rideStatusSchema } from "@heytaksi/shared";
+import { createRideSchema, driverCancelReasons, passengerCancelReasons, rideHistoryQuerySchema, rideStatusSchema } from "@heytaksi/shared";
 import { z } from "zod";
 import type { FastifyPluginAsync } from "fastify";
 import { validate } from "../../core/http/validation.js";
@@ -35,6 +35,10 @@ export const rideRoutes: FastifyPluginAsync = async (app) => {
       data: await service.current(request.user.id),
     }),
   );
+  app.get("/", { preHandler: app.authenticate }, async (request) => ({
+    success: true,
+    data: await service.list(request.user.id, request.user.role, validate(rideHistoryQuerySchema, request.query)),
+  }));
   app.get("/:rideId", { preHandler: app.authenticate }, async (request) => ({
     success: true,
     data: await service.get(

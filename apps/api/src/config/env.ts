@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { isVercelRuntime } from './runtime.js';
 
 // npm workspace scriptleri apps/api içinde çalışır; README ise .env'in repo kökünde
 // oluşturulmasını belirtir. Her iki konuma da bakıyoruz (cwd öncelikli, mevcut
@@ -17,7 +18,7 @@ if (!process.env.DATABASE_URL) {
   if (fromPostgres) process.env.DATABASE_URL = fromPostgres;
 }
 
-const onVercel = process.env.VERCEL === '1';
+const onVercel = isVercelRuntime();
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

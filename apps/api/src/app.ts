@@ -8,6 +8,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
 import { env } from './config/env.js';
 import { registerErrorHandler } from './core/plugins/error-handler.js';
+import { corsPluginOptions } from './core/security/cors.js';
 import { authPlugin } from './core/security/auth.plugin.js';
 import { databasePlugin } from './infrastructure/database/plugin.js';
 import { redisPlugin } from './infrastructure/redis/plugin.js';
@@ -17,10 +18,10 @@ import { dispatchPlugin } from './modules/dispatch/dispatch.plugin.js';
 import { apiModules } from './modules/index.js';
 
 export async function buildApp() {
-  const app = Fastify({ logger: { level: env.LOG_LEVEL }, requestIdHeader: 'x-request-id', trustProxy: true });
+  const app = Fastify({ logger: { level: env.LOG_LEVEL }, requestIdHeader: 'x-request-id', trustProxy: true, ignoreTrailingSlash: true });
   registerErrorHandler(app);
-  await app.register(helmet);
-  await app.register(cors, { origin: env.CORS_ORIGINS, credentials: true });
+  await app.register(cors, corsPluginOptions(env.CORS_ORIGINS));
+  await app.register(helmet, { crossOriginResourcePolicy: { policy: 'cross-origin' }, crossOriginEmbedderPolicy: false });
   await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
   await app.register(sensible);
   await app.register(swagger, { openapi: { info: { title: 'Hey Taksi API', version: '0.1.0' } } });

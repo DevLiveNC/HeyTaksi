@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeAuthFailure, networkFailureMessage } from '../../../../../packages/ui/src/auth/auth-errors.js';
+import { describeAuthFailure, networkFailureMessage } from '../../packages/ui/src/auth/auth-errors.ts';
 
 describe('describeAuthFailure', () => {
   it('rewrites browser network errors such as Safari Load failed', () => {

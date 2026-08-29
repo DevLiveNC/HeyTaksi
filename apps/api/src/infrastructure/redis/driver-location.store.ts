@@ -6,7 +6,7 @@ import {
   type VehicleType,
 } from '@heytaksi/shared';
 import type { FastifyInstance } from 'fastify';
-import type Redis from 'ioredis';
+import type { Redis } from 'ioredis';
 
 /** Aktif sürücü konumlarının Redis anahtarları. */
 const GEO_KEY = 'drivers:geo';

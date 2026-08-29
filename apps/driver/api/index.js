@@ -63,7 +63,7 @@ export default async function handler(request, response) {
     return;
   }
 
-  const apiOrigin = process.env.API_ORIGIN?.replace(/\/$/, '');
+  const apiOrigin = (process.env.API_ORIGIN || 'https://hey-taksi-api.vercel.app').replace(/\/$/, '');
   if (!apiOrigin) {
     response.writeHead(503, { 'content-type': 'application/json; charset=utf-8' });
     response.end(JSON.stringify({

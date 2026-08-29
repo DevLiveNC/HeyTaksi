@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "prebuild": "tsc -p ../../packages/shared/tsconfig.json",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "pretypecheck": "tsc -p ../../packages/shared/tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p api/tsconfig.json",
     "test": "vitest run",
     "db:migrate": "tsx src/infrastructure/database/migrate.ts",

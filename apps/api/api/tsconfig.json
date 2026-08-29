@@ -1,5 +1,12 @@
 {
   "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "declaration": false, "types": ["node"] },
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "types": ["node"],
+    "paths": {
+      "@heytaksi/shared": ["../../../packages/shared/src/index.ts"]
+    }
+  },
   "include": ["index.ts", "../src/**/*.ts", "../../../packages/shared/src/**/*.ts"]
 }

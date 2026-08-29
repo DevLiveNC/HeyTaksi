@@ -1,11 +1,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthGate, AuthPage } from "@heytaksi/ui";
+import { useCallback, type PropsWithChildren } from "react";
+import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from "@heytaksi/ui";
 import { DriverLayout } from "../components/DriverLayout";
 import { DriverProvider } from "../state/DriverContext";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { EarningsPage } from "../features/earnings/EarningsPage";
 import { AccountPage } from "../features/account/AccountPage";
 import { ActiveRidePage } from "../features/ride/ActiveRidePage";
+import { driverApi } from "../services/driverApi";
 
 function DriverApp() {
   return (
@@ -23,10 +25,21 @@ function DriverApp() {
   );
 }
 
+function MapsBridge({ children }: PropsWithChildren) {
+  const { authorizedFetch } = useAuth();
+  const resolveKey = useCallback(
+    () => driverApi.mapsConfig(authorizedFetch).then((config) => config.browserKey),
+    [authorizedFetch],
+  );
+  return <MapsKeyProvider resolveKey={resolveKey}>{children}</MapsKeyProvider>;
+}
+
 export function App() {
   return (
     <AuthGate roles={["driver"]} fallback={<AuthPage audience="Sürücü" allowedRole="driver" redirectTo="/dashboard" />}>
-      <DriverApp />
+      <MapsBridge>
+        <DriverApp />
+      </MapsBridge>
     </AuthGate>
   );
 }

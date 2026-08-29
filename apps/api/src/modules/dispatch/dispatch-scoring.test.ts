@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DISPATCH_BROADCAST_MAX_DRIVERS,
   DISPATCH_OFFER_TTL_SECONDS,
   DISPATCH_RADIUS_STEPS_METERS,
   dispatchWeights,
@@ -7,6 +8,7 @@ import {
   haversineMeters,
   rankDispatchCandidates,
   scoreDispatchCandidate,
+  selectBroadcastRecipients,
 } from '@heytaksi/shared';
 
 const base = {
@@ -156,5 +158,15 @@ describe('dağıtım parametreleri', () => {
   it('teklif penceresi makul bir aralıktadır', () => {
     expect(DISPATCH_OFFER_TTL_SECONDS).toBeGreaterThanOrEqual(10);
     expect(DISPATCH_OFFER_TTL_SECONDS).toBeLessThanOrEqual(60);
+  });
+
+  it('eşzamanlı yayın en fazla 50 sürücüye gider ve sıralamayı korur', () => {
+    expect(DISPATCH_BROADCAST_MAX_DRIVERS).toBe(50);
+    const ranked = Array.from({ length: 80 }, (_, index) => ({ id: `d${index}` }));
+    const selected = selectBroadcastRecipients(ranked);
+    expect(selected).toHaveLength(50);
+    expect(selected[0]?.id).toBe('d0');
+    expect(selected[49]?.id).toBe('d49');
+    expect(selectBroadcastRecipients(ranked.slice(0, 3))).toHaveLength(3);
   });
 });

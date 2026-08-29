@@ -4,6 +4,7 @@ import type {
   DriverDashboard,
   DriverEarnings,
   DriverRideDetail,
+  MapsClientConfig,
   RideContact,
   RideMessage,
   RideStatus,
@@ -73,4 +74,5 @@ export const driverApi = {
       method: "POST",
       body: JSON.stringify({ stars, ...(comment ? { comment } : {}) }),
     }),
+  mapsConfig: (fetcher: AuthorizedFetch) => apiData<MapsClientConfig>(fetcher, "/locations/maps-config"),
 };

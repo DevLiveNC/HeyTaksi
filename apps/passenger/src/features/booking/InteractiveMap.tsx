@@ -1,22 +1,26 @@
 import * as maplibregl from "maplibre-gl";
-import type {
-  GeoJSONSource,
-  Map as MapInstance,
-  MapMouseEvent,
-} from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import type { GeoJSONSource, Map as MapInstance, MapMouseEvent } from "maplibre-gl";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createHtmlMarker, GoogleMapHost } from "@heytaksi/ui";
+import type { HtmlMapMarker } from "@heytaksi/ui";
 import type { Coordinate, RouteEstimate } from "@heytaksi/shared";
+
 interface Props {
   pickup?: Coordinate | null;
   destination?: Coordinate | null;
   route?: RouteEstimate | null;
   driverLocation?: { latitude: number; longitude: number } | null | undefined;
-  /** Faz 6: haritada gösterilen canlı boş taksiler (anonim). */
   nearbyDrivers?: Array<{ id: string; latitude: number; longitude: number; heading: number | null }>;
   onMapClick?: (coordinate: { latitude: number; longitude: number }) => void;
   className?: string;
 }
-export function InteractiveMap({
+
+interface GoogleHandle {
+  map: google.maps.Map;
+  maps: typeof google.maps;
+}
+
+function MapLibreInteractiveMap({
   pickup,
   destination,
   route,
@@ -34,17 +38,12 @@ export function InteractiveMap({
     if (!container.current) return;
     const map = new maplibregl.Map({
       container: container.current,
-      style:
-        import.meta.env.VITE_MAP_STYLE_URL ??
-        "https://tiles.openfreemap.org/styles/positron",
+      style: import.meta.env.VITE_MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/positron",
       center: [pickup?.longitude ?? 34.6415, pickup?.latitude ?? 36.8121],
       zoom: 13,
       attributionControl: {},
     });
-    map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      "top-right",
-    );
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.on("click", (event: MapMouseEvent) =>
       onMapClick?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }),
     );
@@ -57,7 +56,6 @@ export function InteractiveMap({
     };
   }, []);
 
-  // Canlı boş taksiler: marker'lar kimliğe göre yeniden kullanılır, konum akıcı güncellenir.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -85,6 +83,7 @@ export function InteractiveMap({
         nearbyMarkers.current.delete(id);
       }
   }, [nearbyDrivers]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -98,9 +97,7 @@ export function InteractiveMap({
         kind === "pickup" ? "Alış noktası" : kind === "driver" ? "Sürücü konumu" : "Varış noktası",
       );
       markers.current.push(
-        new maplibregl.Marker({ element })
-          .setLngLat([point.longitude, point.latitude])
-          .addTo(map),
+        new maplibregl.Marker({ element }).setLngLat([point.longitude, point.latitude]).addTo(map),
       );
     };
     if (pickup) add(pickup, "pickup");
@@ -115,13 +112,9 @@ export function InteractiveMap({
       map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
     }
     const update = () => {
-      const data = route?.geometry ?? {
-        type: "LineString" as const,
-        coordinates: [],
-      };
+      const data = route?.geometry ?? { type: "LineString" as const, coordinates: [] };
       const source = map.getSource("route") as GeoJSONSource | undefined;
-      if (source)
-        source.setData({ type: "Feature", properties: {}, geometry: data });
+      if (source) source.setData({ type: "Feature", properties: {}, geometry: data });
       else if (map.isStyleLoaded()) {
         map.addSource("route", {
           type: "geojson",
@@ -131,25 +124,127 @@ export function InteractiveMap({
           id: "route-line",
           type: "line",
           source: "route",
-          paint: {
-            "line-color": "#171813",
-            "line-width": 5,
-            "line-opacity": 0.88,
-          },
+          paint: { "line-color": "#171813", "line-width": 5, "line-opacity": 0.88 },
         });
       }
     };
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
   }, [pickup, destination, route, driverLocation]);
+
   return (
-    <div className={`${className}-wrap`} style={{ position: "relative", minHeight: 160 }}>
+    <>
       <div ref={container} className={className} aria-label="Yolculuk haritası" />
       {styleFailed && (
         <div className="map-fallback" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
           Harita altlığı yüklenemedi. Konum işaretleri görünmeye devam eder.
         </div>
       )}
+    </>
+  );
+}
+
+function GoogleInteractiveMap({
+  pickup,
+  destination,
+  route,
+  driverLocation,
+  nearbyDrivers,
+  google,
+  className = "live-map",
+}: Props & { google: GoogleHandle }) {
+  const pointMarkers = useRef<HtmlMapMarker[]>([]);
+  const nearby = useRef<Map<string, HtmlMapMarker>>(new Map());
+  const line = useRef<google.maps.Polyline | null>(null);
+
+  useEffect(() => {
+    const { map, maps } = google;
+    for (const marker of nearby.current.values()) marker.setMap(null);
+    nearby.current.clear();
+    for (const driver of nearbyDrivers ?? []) {
+      const element = document.createElement("div");
+      element.className = "live-marker nearby-taxi";
+      element.setAttribute("aria-label", "Yakındaki boş taksi");
+      const marker = createHtmlMarker(maps, map, { lat: driver.latitude, lng: driver.longitude }, element);
+      marker.setHeading(driver.heading ?? 0);
+      nearby.current.set(driver.id, marker);
+    }
+    return () => {
+      for (const marker of nearby.current.values()) marker.setMap(null);
+      nearby.current.clear();
+    };
+  }, [google, nearbyDrivers]);
+
+  useEffect(() => {
+    const { map, maps } = google;
+    for (const marker of pointMarkers.current) marker.setMap(null);
+    pointMarkers.current = [];
+    const add = (point: { latitude: number; longitude: number }, kind: string, label: string) => {
+      const element = document.createElement("div");
+      element.className = `live-marker ${kind}`;
+      element.setAttribute("aria-label", label);
+      pointMarkers.current.push(
+        createHtmlMarker(maps, map, { lat: point.latitude, lng: point.longitude }, element),
+      );
+    };
+    if (pickup) add(pickup, "pickup", "Alış noktası");
+    if (destination) add(destination, "destination", "Varış noktası");
+    if (driverLocation) add(driverLocation, "driver", "Sürücü konumu");
+
+    const path = (route?.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lat, lng }));
+    if (!line.current) {
+      line.current = new maps.Polyline({
+        path,
+        strokeColor: "#171813",
+        strokeOpacity: 0.88,
+        strokeWeight: 5,
+        map,
+      });
+    } else {
+      line.current.setPath(path);
+      line.current.setMap(map);
+    }
+
+    if (pickup && destination) {
+      const bounds = new maps.LatLngBounds();
+      bounds.extend({ lat: pickup.latitude, lng: pickup.longitude });
+      bounds.extend({ lat: destination.latitude, lng: destination.longitude });
+      if (driverLocation) bounds.extend({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+      map.fitBounds(bounds, 70);
+    } else if (pickup) {
+      map.panTo({ lat: pickup.latitude, lng: pickup.longitude });
+    }
+    return () => {
+      for (const marker of pointMarkers.current) marker.setMap(null);
+      pointMarkers.current = [];
+    };
+  }, [google, pickup, destination, route, driverLocation]);
+
+  return <div className={`${className}-google-layers`} hidden />;
+}
+
+export function InteractiveMap(props: Props) {
+  const [engine, setEngine] = useState<GoogleHandle | null>(null);
+  const onReady = useCallback((map: google.maps.Map, maps: typeof google.maps) => {
+    setEngine({ map, maps });
+  }, []);
+  const className = props.className ?? "live-map";
+  return (
+    <div className={`${className}-wrap`} style={{ position: "relative", minHeight: 160, height: "100%" }}>
+      <GoogleMapHost
+        className={className}
+        ariaLabel="Yolculuk haritası"
+        center={{
+          lat: props.pickup?.latitude ?? 36.8121,
+          lng: props.pickup?.longitude ?? 34.6415,
+        }}
+        {...(props.onMapClick
+          ? { onClick: (latitude: number, longitude: number) => props.onMapClick?.({ latitude, longitude }) }
+          : {})}
+        onReady={onReady}
+        fallback={<MapLibreInteractiveMap {...props} />}
+      />
+      {engine ? <GoogleInteractiveMap {...props} google={engine} /> : null}
     </div>
   );
 }

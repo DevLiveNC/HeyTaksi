@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback, type PropsWithChildren } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthGate, AuthPage } from "@heytaksi/ui";
+import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from "@heytaksi/ui";
 import { PassengerLayout } from "../components/PassengerLayout";
 import { HomePage } from "../features/home/HomePage";
 
@@ -14,6 +14,7 @@ import { ProfileSettingsPage } from "../features/profile/ProfileSettingsPage";
 import { NotificationsPage } from "../features/notifications/NotificationsPage";
 import { PassengerExperienceProvider } from "../state/PassengerExperience";
 import { BookingProvider } from "../features/booking/BookingContext";
+import { locationApi } from "../services/rideApi";
 const DestinationSearchPage = lazy(() => import("../features/home/DestinationSearchPage").then((module) => ({ default: module.DestinationSearchPage })));
 const RideBookingPage = lazy(() => import("../features/booking/RideBookingPage").then((module) => ({ default: module.RideBookingPage })));
 const ActiveRidePage = lazy(() => import("../features/booking/ActiveRidePage").then((module) => ({ default: module.ActiveRidePage })));
@@ -45,13 +46,24 @@ function PassengerApp() {
     </PassengerExperienceProvider>
   );
 }
+function MapsBridge({ children }: PropsWithChildren) {
+  const { authorizedFetch } = useAuth();
+  const resolveKey = useCallback(
+    () => locationApi.mapsConfig(authorizedFetch).then((config) => config.browserKey),
+    [authorizedFetch],
+  );
+  return <MapsKeyProvider resolveKey={resolveKey}>{children}</MapsKeyProvider>;
+}
+
 export function App() {
   return (
     <AuthGate
       roles={["passenger"]}
       fallback={<AuthPage audience="Yolcu" allowedRole="passenger" redirectTo="/home" />}
     >
-      <PassengerApp />
+      <MapsBridge>
+        <PassengerApp />
+      </MapsBridge>
     </AuthGate>
   );
 }

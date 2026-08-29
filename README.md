@@ -79,21 +79,24 @@ Faz 3 yolcu deneyimi `apps/passenger/src/features` altında `home`, `rides`, `wa
 
 ## Konum ve yolculuk altyapısı
 
-Faz 4 ile MapLibre GL tabanlı harita, browser geolocation izin akışı, Nominatim uyumlu geocoding ve OSRM uyumlu routing adaptörleri eklendi. Provider adresleri environment değişkenleriyle self-hosted veya ticari servislere taşınabilir. Yolculuk talebi, sunucu tarafı fiyat tahmini, temel uygun sürücü eşleştirme, durum makinesi, iptal kaydı ve WebSocket `ride.updated` kanalı hazırdır.
+Harita eklentisi **Google Maps JavaScript API** kullanır (Directions + Geocoding sunucuda, Maps JS tarayıcıda). Anahtar yoksa geliştirme düşümü Nominatim / OSRM / MapLibre ile çalışır.
 
 ```text
 POST /api/v1/locations/route
 GET  /api/v1/locations/search
 GET  /api/v1/locations/reverse
+GET  /api/v1/locations/maps-config   # tarayıcı Maps JS anahtarı (GOOGLE_MAPS_BROWSER_KEY)
 POST /api/v1/rides
 GET  /api/v1/rides/current
 POST /api/v1/rides/:rideId/match
 POST /api/v1/rides/:rideId/cancel
 PATCH /api/v1/rides/:rideId/status
 POST  /api/v1/rides/:rideId/location
+POST  /api/v1/rides/:rideId/accept   # ilk kabul eden sürücü yolcuyu alır
+POST  /api/v1/rides/:rideId/reject
 ```
 
-`MAP_FALLBACK=true` iken routing/geocoding sağlayıcısına ulaşılamazsa geliştirme ortamı için yaklaşık rota/adres üretilir; production'da bu mod kapatılmalıdır.
+`GOOGLE_MAPS_API_KEY` (sunucu, IP kısıtlı) ve `GOOGLE_MAPS_BROWSER_KEY` veya `VITE_GOOGLE_MAPS_API_KEY` (tarayıcı, HTTP referrer kısıtlı) Google Cloud'da Maps JavaScript API, Geocoding API ve Directions API açık olmalıdır. `MAP_FALLBACK=true` iken sağlayıcıya ulaşılamazsa yaklaşık rota/adres üretilir; production'da bu mod kapatılmalıdır.
 
 ## Sürücü deneyimi (Faz 5)
 
@@ -104,7 +107,7 @@ offline ⇄ online → available ⇄ paused        (sürücü seçimi: offline/o
                    ↘ on_trip                 (sistem: teklif kabulü ile girilir, bitişte available'a döner)
 ```
 
-Yolcu eşleştiğinde sürücüye 20 saniyelik kabul penceresiyle `ride.offer` bildirimi gider (pickup, varış, mesafe, tahmini süre, tahmini kazanç, yolcu puanı, kabul/red). Kabul edilirse akış `driver_arriving → driver_arrived → started → in_progress → completed` durum makinesiyle ilerler; bekleme süresi `driver_arrived` anından itibaren ölçülür. Sürücü; harita navigasyonu, yolcu bilgileri, maskeli telefonla güvenli arama, yolculuk içi mesajlaşma, nedenli iptal ve yolcu puanlama özelliklerine sahiptir. Kazanç ekranı günlük/haftalık/aylık özet ve yolculuk bazlı döküm gösterir; ödeme çekme sistemi bu fazda bilinçli olarak yoktur.
+Yolcu eşleştiğinde yakındaki uygun sürücülere **aynı anda** `ride.offer` bildirimi gider (en fazla 50). Kabul penceresi 20 saniyedir. **İlk kabul eden sürücü yolcuyu alır**; diğerlerinin teklifi `lost_race` ile kapanır. Kabul edilirse akış `driver_arriving → driver_arrived → started → in_progress → completed` durum makinesiyle ilerler.
 
 ```text
 GET   /api/v1/drivers/me/dashboard            özet + yoğunluk bölgeleri (son 3 saat)
@@ -140,14 +143,16 @@ Araç tipine göre filtrele   aktif araç + doğrulanmış sürücü + online/av
   ↓
 ETA hesapla                 kuş uçuşu × 1.35 yol katsayısı, 26 km/sa şehir hızı, +45 sn hazırlık
   ↓
-Sürücüleri sırala           ağırlıklı skor (aşağıda), eşitlikte ETA → mesafe → id ile kararlı sıralama
+Sürücüleri sırala           ağırlıklı skor, eşitlikte ETA → mesafe → id
   ↓
-Teklif gönder               ride.offer, 20 sn kabul penceresi (dispatch_offers)
+Eşzamanlı yayın             yakındaki tüm uygun sürücülere ride.offer (en fazla 50)
   ↓
-Sürücü kabul eder           ride assigned → driver_assigned, oturum kapanır
+İlk kabul eden alır         rides satırı FOR UPDATE + accepted kısmi tekil indeks
+  ↓
+Diğer teklifler kapanır     lost_race bildirimi (WebSocket + uygulama içi bildirim)
 ```
 
-Sürücü **reddederse veya süre dolarsa** teklif kapanır ve motor aynı sıralamadaki bir sonraki sürücüye geçer. Aday kalmazsa yarıçap 3 km → 6 km → 12 km olarak genişler. Toplam arama süresi 180 saniyedir; sonunda yolcuya sonuçsuz bildirimi gider ve operasyon aramayı yeniden başlatabilir.
+Hepsi reddederse veya süre dolarsa yarıçap 3 km → 6 km → 12 km olarak genişler ve kalan sürücülere yeniden yayın yapılır. Toplam arama süresi 180 saniyedir.
 
 ### Skorlama
 
@@ -208,13 +213,13 @@ npm run db:seed-fleet        # 8 sürücü: farklı araç tipi, puan, kabul ve i
 npm run dev:simulate-fleet   # sürücüleri hareket ettirir ve teklifleri yanıtlar (yalnızca geliştirme)
 ```
 
-Simülatörün teklif davranışı `SIMULATOR_OFFER_POLICY` ile ayarlanır: `accept` (varsayılan, yolculuğu tamamlar), `reject` (sıradaki sürücüye geçişi gösterir) veya `ignore` (zaman aşımı akışını gösterir). `SIMULATOR_ACCEPT_DELAY` saniyesi kadar bekleyerek gerçek sürücü uygulamasına öncelik tanır.
+Simülatörün teklif davranışı `SIMULATOR_OFFER_POLICY` ile ayarlanır: `accept` (varsayılan; eşzamanlı yayında ilk yanıtlayan yolcuyu alır), `reject` (yarıçap genişlemesini gösterir) veya `ignore` (zaman aşımı akışını gösterir). `SIMULATOR_ACCEPT_DELAY` saniyesi kadar bekleyerek gerçek sürücü uygulamasına öncelik tanır.
 
 ## Faz sınırı
 
 Dispatch deterministiktir: sabit ağırlıklı skor, sabit yarıçap adımları ve sabit zaman pencereleri kullanır. Talep tahmini, dinamik fiyatlama veya öğrenen sıralama bilinçli olarak yoktur.
 
-Dağıtım zamanlayıcısı (`dispatchPlugin`) saniyede bir çalışır ve **tek instance** varsayar. Yatay ölçeklemede bu döngü tek bir lider işlemde yürütülmelidir (ör. Redis tabanlı kilit); teklif tekilliği veritabanındaki kısmi tekil indekslerle zaten güvence altındadır. Realtime yayın süreç içi bellekte tutulur; çok instance'lı kurulumda Redis pub/sub köprüsü gerekir.
+Dağıtım zamanlayıcısı (`dispatchPlugin`) saniyede bir çalışır ve **tek instance** varsayar. Yatay ölçeklemede bu döngü tek bir lider işlemde yürütülmelidir (ör. Redis tabanlı kilit). Aynı yolculuğu iki sürücünün almasını `rides` satır kilidi ve `dispatch_offers(ride_id) WHERE status='accepted'` kısmi tekil indeksi engeller. Realtime yayın süreç içi bellekte tutulur; çok instance'lı kurulumda Redis pub/sub köprüsü gerekir.
 
 Vercel Functions kalıcı WebSocket sunmadığı için realtime API uzun yaşayan Node/container ortamında veya managed realtime serviste çalıştırılmalıdır. Public OSM servisleri geliştirme içindir; production trafiğinde managed/self-hosted provider seçilmelidir. Ödeme tahsilatı, sürücü ödeme çekme, kampanya ve rezervasyon henüz yoktur. Güvenli aramada numara arayüzde maskelenir; gerçek proxy/anonim numara servisi sonraki fazdadır.
 

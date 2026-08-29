@@ -4,6 +4,7 @@ import type {
   DispatchOfferView,
   DispatchOverview,
   DispatchStatusView,
+  MapsClientConfig,
 } from '@heytaksi/shared';
 
 export type AuthorizedFetch = (path: string, init?: RequestInit) => Promise<Response>;
@@ -28,4 +29,5 @@ export const dispatchApi = {
     apiData<DispatchCandidate[]>(fetcher, `/dispatch/rides/${rideId}/candidates`),
   restart: (fetcher: AuthorizedFetch, rideId: string) =>
     apiData<DispatchStatusView>(fetcher, `/dispatch/rides/${rideId}/restart`, { method: 'POST', body: '{}' }),
+  mapsConfig: (fetcher: AuthorizedFetch) => apiData<MapsClientConfig>(fetcher, '/locations/maps-config'),
 };

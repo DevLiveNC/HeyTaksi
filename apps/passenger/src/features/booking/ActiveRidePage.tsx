@@ -20,7 +20,7 @@ import { wsBaseUrl } from "../../services/config";
 const copy: Record<RideStatus, { title: string; caption: string }> = {
   searching: {
     title: "Taksin aranıyor",
-    caption: "Yakındaki sürücülere talebini iletiyoruz.",
+    caption: "Yakındaki sürücülere talebin aynı anda iletildi. İlk kabul eden sürücü seni alır.",
   },
   driver_assigned: {
     title: "Sürücün bulundu",
@@ -208,10 +208,12 @@ export function ActiveRidePage() {
         {status === "searching" ? (
           <div className="searching-progress">
             <span />
-            {ride.dispatch?.currentOffer ? (
+            {ride.dispatch && (ride.dispatch.pendingOffers ?? 0) > 0 ? (
               <small>
-                {ride.dispatch.currentOffer.driverName} adlı sürücüye ulaşıldı ·{" "}
-                {Math.max(1, Math.round(ride.dispatch.currentOffer.etaSeconds / 60))} dk uzaklıkta
+                {ride.dispatch.pendingOffers} sürücüye bildirildi · ilk kabul eden alır
+                {ride.dispatch.currentOffer
+                  ? ` · en yakını ${Math.max(1, Math.round(ride.dispatch.currentOffer.etaSeconds / 60))} dk`
+                  : ""}
               </small>
             ) : ride.dispatch && ride.dispatch.offersSent > 0 ? (
               <small>

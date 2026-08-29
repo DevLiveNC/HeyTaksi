@@ -20,6 +20,11 @@ if (!process.env.DATABASE_URL) {
 
 const onVercel = isVercelRuntime();
 
+const optionalKey = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().min(10).optional(),
+);
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('0.0.0.0'),
@@ -45,6 +50,15 @@ const schema = z.object({
   MAP_SERVICE_USER_AGENT: z.string().default('HeyTaksi/0.1 support@heytaksi.app'),
   // Sağlayıcı erişilemezse geliştirme ortamında yaklaşık rota/adres üretir; production'da kapatılır.
   MAP_FALLBACK: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
+  /** Sunucu tarafı Directions / Geocoding. Boşsa OSM (Nominatim + OSRM) kullanılır. */
+  GOOGLE_MAPS_API_KEY: optionalKey,
+  /** Maps JavaScript API anahtarı; kimliği doğrulanmış istemcilere `/locations/maps-config` ile verilir. */
+  GOOGLE_MAPS_BROWSER_KEY: optionalKey,
+  /** Cloud tabanlı harita stili (AdvancedMarker için gerekli olabilir). */
+  GOOGLE_MAPS_MAP_ID: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174,http://localhost:5175'),
 });
 

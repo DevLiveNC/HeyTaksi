@@ -1,7 +1,8 @@
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapInstance } from 'maplibre-gl';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LiveDriverMarker, LiveRideMarker } from '@heytaksi/shared';
+import { GoogleMapHost } from '@heytaksi/ui';
 import { mapStyleUrl } from '../../services/config';
 
 interface Props {
@@ -40,7 +41,7 @@ const OFFLINE_STYLE: maplibregl.StyleSpecification = {
  * Sürücüler tek bir GeoJSON kaynağıyla çizilir; her konum güncellemesinde yalnızca
  * kaynak verisi değişir (marker yeniden oluşturulmaz), böylece yüzlerce sürücüde de akıcı kalır.
  */
-export function LiveMap({ drivers, rides, selectedRideId, selectedDriverId, onSelectDriver, onSelectRide }: Props) {
+export function MapLibreLiveMap({ drivers, rides, selectedRideId, selectedDriverId, onSelectDriver, onSelectRide }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const loaded = useRef(false);
@@ -265,4 +266,133 @@ export function LiveMap({ drivers, rides, selectedRideId, selectedDriverId, onSe
   }, [selectedDriverId, selectedRideId]);
 
   return <div className="live-map" ref={container} role="application" aria-label="Canlı sürücü haritası" />;
+}
+
+function GoogleLiveLayers({
+  map,
+  maps,
+  drivers,
+  rides,
+  selectedRideId,
+  selectedDriverId,
+  onSelectDriver,
+  onSelectRide,
+}: Props & { map: google.maps.Map; maps: typeof google.maps }) {
+  const fitted = useRef(false);
+  const handlers = useRef({ onSelectDriver, onSelectRide });
+  handlers.current = { onSelectDriver, onSelectRide };
+
+  useEffect(() => {
+    const click = map.data.addListener('click', (event: google.maps.Data.MouseEvent) => {
+      const driverId = event.feature.getProperty('driverId') as string | undefined;
+      const rideId = event.feature.getProperty('rideId') as string | undefined;
+      if (driverId) handlers.current.onSelectDriver(driverId);
+      if (rideId) handlers.current.onSelectRide(rideId);
+    });
+    return () => click.remove();
+  }, [map]);
+
+  useEffect(() => {
+    map.data.forEach((feature) => map.data.remove(feature));
+    map.data.addGeoJson({
+      type: 'FeatureCollection',
+      features: [
+        ...rides
+          .filter((ride) => ride.pickup.latitude !== 0)
+          .map((ride) => ({
+            type: 'Feature' as const,
+            id: `ride-${ride.rideId}`,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: [ride.pickup.longitude, ride.pickup.latitude],
+            },
+            properties: {
+              kind: 'ride',
+              rideId: ride.rideId,
+              searching: ride.status === 'searching' ? 1 : 0,
+            },
+          })),
+        ...drivers.map((driver) => ({
+          type: 'Feature' as const,
+          id: `driver-${driver.driverId}`,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: [driver.longitude, driver.latitude],
+          },
+          properties: {
+            kind: 'driver',
+            driverId: driver.driverId,
+            color: availabilityColor[driver.availability] ?? availabilityColor.offline,
+            opacity: driver.ageSeconds > 25 ? 0.45 : 1,
+          },
+        })),
+      ],
+    });
+    map.data.setStyle((feature) => {
+      const kind = feature.getProperty('kind');
+      if (kind === 'ride') {
+        const searching = feature.getProperty('searching') === 1;
+        return {
+          icon: {
+            path: maps.SymbolPath.CIRCLE,
+            scale: searching ? 8 : 6,
+            fillColor: searching ? '#ff5a4d' : '#7c8cff',
+            fillOpacity: 1,
+            strokeColor: '#0d0d0d',
+            strokeWeight: 2,
+          },
+        };
+      }
+      return {
+        icon: {
+          path: maps.SymbolPath.CIRCLE,
+          scale: 7,
+          fillColor: (feature.getProperty('color') as string) ?? '#5c5c5c',
+          fillOpacity: (feature.getProperty('opacity') as number) ?? 1,
+          strokeColor: '#111111',
+          strokeWeight: 2,
+        },
+      };
+    });
+    if (!fitted.current && drivers.length) {
+      fitted.current = true;
+      const bounds = new maps.LatLngBounds();
+      for (const driver of drivers) bounds.extend({ lat: driver.latitude, lng: driver.longitude });
+      map.fitBounds(bounds, 90);
+    }
+  }, [map, maps, drivers, rides]);
+
+  useEffect(() => {
+    const driver = selectedDriverId ? drivers.find((item) => item.driverId === selectedDriverId) : null;
+    if (driver) {
+      map.panTo({ lat: driver.latitude, lng: driver.longitude });
+      return;
+    }
+    const ride = selectedRideId ? rides.find((item) => item.rideId === selectedRideId) : null;
+    if (ride && ride.pickup.latitude !== 0) map.panTo({ lat: ride.pickup.latitude, lng: ride.pickup.longitude });
+  }, [map, drivers, rides, selectedDriverId, selectedRideId]);
+
+  return null;
+}
+
+/** Operasyon canlı haritası: Google Maps eklentisi, anahtar yoksa MapLibre. */
+export function LiveMap(props: Props) {
+  const [engine, setEngine] = useState<{ map: google.maps.Map; maps: typeof google.maps } | null>(null);
+  const onReady = useCallback((map: google.maps.Map, maps: typeof google.maps) => {
+    setEngine({ map, maps });
+  }, []);
+  return (
+    <>
+      <GoogleMapHost
+        className="live-map"
+        ariaLabel="Canlı sürücü haritası"
+        dark
+        center={{ lat: FALLBACK_CENTER[1], lng: FALLBACK_CENTER[0] }}
+        zoom={12}
+        onReady={onReady}
+        fallback={<MapLibreLiveMap {...props} />}
+      />
+      {engine ? <GoogleLiveLayers {...props} map={engine.map} maps={engine.maps} /> : null}
+    </>
+  );
 }

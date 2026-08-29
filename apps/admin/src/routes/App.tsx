@@ -1,8 +1,10 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { AuthGate, AuthPage, useAuth } from '@heytaksi/ui';
+import { useCallback, type PropsWithChildren } from 'react';
+import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from '@heytaksi/ui';
 import { DispatchProvider, useDispatch } from '../state/DispatchContext';
 import { DispatchPage } from '../features/dispatch/DispatchPage';
 import { AdminDriversPage, AdminPassengersPage, AdminRidesPage, AdminSupportPage, AdminVehiclesPage } from '../features/ops/ListPages';
+import { dispatchApi } from '../services/dispatchApi';
 
 const modules = [
   { name: 'Yolculuklar', path: '/rides' },
@@ -124,9 +126,20 @@ export function App() {
       roles={['admin', 'dispatcher', 'support']}
       fallback={<AuthPage audience="Yönetim ekibi" allowedRole="admin" allowedRoles={['admin', 'dispatcher', 'support']} redirectTo="/canli-operasyon" />}
     >
-      <DispatchProvider>
-        <AdminPanel />
-      </DispatchProvider>
+      <MapsBridge>
+        <DispatchProvider>
+          <AdminPanel />
+        </DispatchProvider>
+      </MapsBridge>
     </AuthGate>
   );
+}
+
+function MapsBridge({ children }: PropsWithChildren) {
+  const { authorizedFetch } = useAuth();
+  const resolveKey = useCallback(
+    () => dispatchApi.mapsConfig(authorizedFetch).then((config) => config.browserKey),
+    [authorizedFetch],
+  );
+  return <MapsKeyProvider resolveKey={resolveKey}>{children}</MapsKeyProvider>;
 }

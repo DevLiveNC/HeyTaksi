@@ -1582,12 +1582,11 @@ input:focus-visible {
   background: var(--yellow);
   border-radius: 7px;
 }
-.live-marker.driver {
-  width: 28px;
-  height: 28px;
-  background: var(--yellow);
-  border-color: var(--ink);
-  border-radius: 9px;
+.live-marker.nearby-taxi {
+  background: #ffcf20;
+}
+.gm-style {
+  font-family: inherit;
 }
 .live-taxi {
   z-index: 4;

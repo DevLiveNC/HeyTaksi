@@ -394,8 +394,8 @@ export class RideService {
    * ardından yolculuk driver_arriving durumuna geçer.
    */
   async accept(rideId: string, driverUserId: string): Promise<DriverRideDetail> {
-    const pending = await this.app.dispatch.pendingOffer(rideId);
-    if (pending) await this.app.dispatch.accept(rideId, driverUserId);
+    const pending = await this.app.dispatch.pendingOfferForDriver(driverUserId);
+    if (pending?.rideId === rideId) await this.app.dispatch.accept(rideId, driverUserId);
     else await this.releaseStaleAssignments(driverUserId);
     const current = await this.driverRideDetail(rideId, driverUserId);
     if (current.status !== "driver_assigned")
@@ -426,8 +426,8 @@ export class RideService {
    * Atanmış (eski akış) yolculuklarda atama kaldırılır.
    */
   async reject(rideId: string, driverUserId: string, reason?: string): Promise<{ status: RideStatus }> {
-    const pending = await this.app.dispatch.pendingOffer(rideId);
-    if (pending) {
+    const pending = await this.app.dispatch.pendingOfferForDriver(driverUserId);
+    if (pending?.rideId === rideId) {
       await this.app.dispatch.reject(rideId, driverUserId, reason ?? "driver_rejected");
       return { status: "searching" };
     }

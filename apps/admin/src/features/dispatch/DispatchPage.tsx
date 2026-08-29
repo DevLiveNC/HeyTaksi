@@ -219,14 +219,16 @@ export function DispatchPage() {
                     <span>{(detail.radiusMeters / 1000).toFixed(0)} km yarıçap</span>
                     <span>{detail.offersSent} teklif</span>
                   </div>
-                  {detail.currentOffer && (
+                  {detail.pendingOffers > 0 && (
                     <div className="current-offer">
-                      <small>BEKLEYEN TEKLİF</small>
-                      <strong>{detail.currentOffer.driverName}</strong>
-                      <span>
-                        {minutes(detail.currentOffer.etaSeconds)} · {(detail.currentOffer.distanceMeters / 1000).toFixed(1)} km
-                        · son {clock(detail.currentOffer.expiresAt)}
-                      </span>
+                      <small>EŞZAMANLI YAYIN · İLK KABUL EDEN ALIR</small>
+                      <strong>{detail.pendingOffers} sürücüye bildirildi</strong>
+                      {detail.currentOffer && (
+                        <span>
+                          en yakın {minutes(detail.currentOffer.etaSeconds)} · {(detail.currentOffer.distanceMeters / 1000).toFixed(1)} km
+                          · son {clock(detail.currentOffer.expiresAt)}
+                        </span>
+                      )}
                     </div>
                   )}
                   {candidates.length > 0 && (

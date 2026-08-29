@@ -21,8 +21,7 @@ export function RideOfferSheet() {
     return () => window.clearInterval(timer);
   }, [ride?.id, offerArrivedAt, offerExpiresAt]);
 
-  // Süre dolduğunda sunucu teklifi zaten kapatır ve sıradaki sürücüye geçer;
-  // istemci yalnızca kartı gizler, gereksiz istek göndermez.
+  // Süre dolduğunda sunucu teklifi kapatır; başka sürücü kabul ettiyse kart zaten kapanmıştır.
   if (!ride?.offerId) return null;
   const progress = Math.min(100, (remaining / OFFER_SECONDS) * 100);
   const pickupEta = ride.pickupEtaSeconds ? Math.max(1, Math.round(ride.pickupEtaSeconds / 60)) : null;
@@ -94,7 +93,7 @@ export function RideOfferSheet() {
           </button>
         </div>
         <p className="offer-note">
-          <Timer size={12} /> Süre dolarsa istek sıradaki sürücüye iletilir.
+          <Timer size={12} /> İlk kabul eden sürücü yolcuyu alır. Süre dolarsa arama genişler.
         </p>
       </div>
     </div>

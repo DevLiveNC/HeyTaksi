@@ -3,6 +3,7 @@ import type {
   Coordinate,
   CreateRideInput,
   DispatchStatusView,
+  MapsClientConfig,
   RideHistoryFilter,
   RideHistoryItem,
   RouteEstimate,
@@ -52,6 +53,8 @@ export const locationApi = {
       method: "POST",
       body: JSON.stringify({ pickup, destination }),
     }),
+  mapsConfig: (fetcher: Parameters<typeof apiData>[0]) =>
+    apiData<MapsClientConfig>(fetcher, "/locations/maps-config"),
 };
 export const rideApi = {
   create: (fetcher: Parameters<typeof apiData>[0], input: CreateRideInput) =>

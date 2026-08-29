@@ -1,4 +1,5 @@
 import {
+  DISPATCH_BROADCAST_MAX_DRIVERS,
   DISPATCH_OFFER_TTL_SECONDS,
   DISPATCH_RADIUS_STEPS_METERS,
   DISPATCH_SEARCH_TTL_SECONDS,
@@ -6,6 +7,7 @@ import {
   isDriverDispatchable,
   rankDispatchCandidates,
   scoreDispatchCandidate,
+  selectBroadcastRecipients,
   type DispatchCandidate,
   type DispatchOfferView,
   type DispatchStatusView,
@@ -14,6 +16,7 @@ import {
 } from '@heytaksi/shared';
 import type { FastifyInstance } from 'fastify';
 import { AppError } from '../../core/errors/app-error.js';
+import { createNotification } from '../notifications/index.js';
 
 interface RideRow {
   id: string;
@@ -54,12 +57,12 @@ interface EligibleDriverRow {
 }
 
 /**
- * Deterministik dağıtım motoru.
+ * Deterministik dağıtım motoru — eşzamanlı yayın, ilk kabul eden alır.
  *
  * Akış: yolcu talep eder → uygun sürücüler bulunur → araç tipine göre filtrelenir →
- * ETA hesaplanır → sürücüler sıralanır → teklif gönderilir → sürücü kabul eder → yolculuk atanır.
- * Sürücü reddeder veya süre dolarsa sıradaki sürücüye geçilir. Yapay zekâ veya rastgelelik yoktur;
- * aynı girdi her zaman aynı sıralamayı üretir.
+ * ETA hesaplanır → sürücüler sıralanır → yarıçaptaki tüm uygun sürücülere (en fazla 50)
+ * aynı anda teklif gider → ilk kabul eden yolculuğu alır, diğer teklifler kapanır.
+ * Hepsi reddeder veya süre dolduysa yarıçap genişler. Yapay zekâ yoktur.
  */
 export class DispatchService {
   constructor(private readonly app: FastifyInstance) {}
@@ -99,8 +102,8 @@ export class DispatchService {
     return result.rows[0] ?? null;
   }
 
-  /** Yolculuğun bekleyen teklifi (varsa). */
-  async pendingOffer(rideId: string) {
+  /** Yolculuğun bekleyen teklifleri (eşzamanlı yayın). */
+  async pendingOffers(rideId: string) {
     const result = await this.app.db.query<{
       id: string;
       driverId: string;
@@ -115,10 +118,16 @@ export class DispatchService {
               o.expires_at AS "expiresAt", o.eta_seconds AS "etaSeconds",
               o.distance_meters AS "distanceMeters", o.rank
        FROM dispatch_offers o JOIN drivers d ON d.id=o.driver_id
-       WHERE o.ride_id=$1 AND o.status='pending'`,
+       WHERE o.ride_id=$1 AND o.status='pending'
+       ORDER BY o.eta_seconds ASC, o.distance_meters ASC, o.rank ASC`,
       [rideId],
     );
-    return result.rows[0] ?? null;
+    return result.rows;
+  }
+
+  /** En yakın bekleyen teklif (yolcu ETA özeti). */
+  async pendingOffer(rideId: string) {
+    return (await this.pendingOffers(rideId))[0] ?? null;
   }
 
   /** Sürücünün kendisine gelen bekleyen teklifi. */
@@ -168,13 +177,18 @@ export class DispatchService {
         expiresAt: new Date(offer.expiresAt).toISOString(),
       };
     }
+    const pendingCount = await this.app.db.query<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM dispatch_offers WHERE ride_id=$1 AND status='pending'`,
+      [rideId],
+    );
     return {
       rideId,
       status: (session?.status ?? (last.rows[0]?.status as DispatchStatusView['status'])) ?? 'idle',
       round: session?.round ?? 0,
       radiusMeters: session?.radiusMeters ?? DISPATCH_RADIUS_STEPS_METERS[0],
-      candidatesFound: 0,
+      candidatesFound: pendingCount.rows[0]?.n ?? 0,
       offersSent: counts.rows[0]?.offers ?? 0,
+      pendingOffers: pendingCount.rows[0]?.n ?? 0,
       expiresAt: session ? new Date(session.expiresAt).toISOString() : null,
       currentOffer,
     };
@@ -280,7 +294,7 @@ export class DispatchService {
 
   /* ----------------------------- akış -------------------------------- */
 
-  /** Yolcu talebi için arama oturumunu başlatır ve ilk teklifi gönderir. */
+  /** Yolcu talebi için arama oturumunu başlatır ve yakındaki tüm sürücülere teklifi yayınlar. */
   async start(rideId: string): Promise<DispatchStatusView> {
     const ride = await this.ride(rideId);
     if (!ride) throw new AppError(404, 'RIDE_NOT_FOUND', 'Yolculuk bulunamadı.');
@@ -300,8 +314,8 @@ export class DispatchService {
   }
 
   /**
-   * Arama döngüsünün tek adımı: bekleyen teklif yoksa sıradaki en uygun sürücüye teklif gönderir.
-   * Aday kalmazsa yarıçapı genişletir; süre dolduysa oturumu sonlandırır.
+   * Arama döngüsünün tek adımı: yarıçaptaki tüm uygun sürücülere eşzamanlı teklif gönderir.
+   * Bekleyen teklif varken yeni sürücü gelirse ona da yayınlanır. Aday kalmazsa yarıçap genişler.
    */
   async pump(rideId: string): Promise<void> {
     const session = await this.session(rideId);
@@ -315,25 +329,22 @@ export class DispatchService {
       await this.exhaust(rideId, 'search_timeout');
       return;
     }
-    const pending = await this.pendingOffer(rideId);
-    if (pending && new Date(pending.expiresAt).getTime() > Date.now()) return;
 
+    const pending = await this.pendingOffers(rideId);
     for (let step = session.round; step < DISPATCH_RADIUS_STEPS_METERS.length; step += 1) {
       const radius = DISPATCH_RADIUS_STEPS_METERS[step]!;
-      const ranked = await this.candidates(rideId, radius);
-      const best = ranked[0];
-      if (best) {
-        if (radius !== session.radiusMeters || step !== session.round) {
-          await this.app.db.query(
-            `UPDATE dispatch_sessions SET round=$2, radius_meters=$3, updated_at=NOW() WHERE id=$1`,
-            [session.id, step, radius],
-          );
-        }
-        await this.sendOffer(session.id, ride, best);
-        return;
+      const ranked = selectBroadcastRecipients(await this.candidates(rideId, radius), DISPATCH_BROADCAST_MAX_DRIVERS);
+      if (!ranked.length) continue;
+      if (radius !== session.radiusMeters || step !== session.round) {
+        await this.app.db.query(
+          `UPDATE dispatch_sessions SET round=$2, radius_meters=$3, updated_at=NOW() WHERE id=$1`,
+          [session.id, step, radius],
+        );
       }
+      await this.sendBroadcast(session.id, ride, ranked);
+      return;
     }
-    // Hiçbir yarıçapta aday yok: oturum açık kalır, sonraki tur yeniden dener.
+    if (pending.length) return;
     await this.app.db.query(
       `UPDATE dispatch_sessions SET round=0, radius_meters=$2, updated_at=NOW() WHERE id=$1`,
       [session.id, DISPATCH_RADIUS_STEPS_METERS[DISPATCH_RADIUS_STEPS_METERS.length - 1]],
@@ -345,53 +356,73 @@ export class DispatchService {
     });
   }
 
-  /** Seçilen sürücüye teklifi yazar ve gerçek zamanlı bildirir. Yazılamazsa false döner. */
-  private async sendOffer(sessionId: string, ride: RideRow, candidate: DispatchCandidate): Promise<boolean> {
+  /**
+   * Yakındaki sürücülere aynı anda teklif yazar, WebSocket ve bildirim gönderir.
+   * Bir sürücüde bekleyen başka teklif varsa o satır atlanır (kısmi tekil indeks).
+   */
+  private async sendBroadcast(sessionId: string, ride: RideRow, candidates: DispatchCandidate[]): Promise<number> {
+    if (!candidates.length) return 0;
     const expiresAt = new Date(Date.now() + DISPATCH_OFFER_TTL_SECONDS * 1000);
-    let offerId: string;
-    try {
-      const inserted = await this.app.db.query<{ id: string }>(
-        `INSERT INTO dispatch_offers(session_id, ride_id, driver_id, vehicle_id, rank, score, eta_seconds,
-                                     distance_meters, score_breakdown, expires_at)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-        [
-          sessionId,
-          ride.id,
-          candidate.driverId,
-          candidate.vehicleId,
-          candidate.rank,
-          candidate.score,
-          candidate.etaSeconds,
-          candidate.distanceMeters,
-          JSON.stringify(candidate.breakdown),
-          expiresAt,
-        ],
-      );
-      offerId = inserted.rows[0]!.id;
-    } catch (error) {
-      // Eşzamanlı başka bir teklif yazıldı (tekil kısmi indeks); sıradaki aday denenir.
-      this.app.log.debug({ err: error, rideId: ride.id }, 'Teklif yazılamadı, eşzamanlı atama var.');
-      return false;
+    const template = await this.offerRideTemplate(ride);
+    const sent: Array<{ offerId: string; candidate: DispatchCandidate }> = [];
+    for (const candidate of candidates) {
+      try {
+        const inserted = await this.app.db.query<{ id: string }>(
+          `INSERT INTO dispatch_offers(session_id, ride_id, driver_id, vehicle_id, rank, score, eta_seconds,
+                                       distance_meters, score_breakdown, expires_at)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          [
+            sessionId,
+            ride.id,
+            candidate.driverId,
+            candidate.vehicleId,
+            candidate.rank,
+            candidate.score,
+            candidate.etaSeconds,
+            candidate.distanceMeters,
+            JSON.stringify(candidate.breakdown),
+            expiresAt,
+          ],
+        );
+        const offerId = inserted.rows[0]?.id;
+        if (offerId) sent.push({ offerId, candidate });
+      } catch (error) {
+        this.app.log.debug({ err: error, rideId: ride.id, driverId: candidate.driverId }, 'Teklif yazılamadı.');
+      }
     }
-    this.app.log.info(
-      { rideId: ride.id, driverId: candidate.driverId, rank: candidate.rank, score: candidate.score },
-      'Dispatch teklifi gönderildi',
-    );
-    this.app.realtime.publishUser(candidate.driverUserId, 'ride.offer', {
-      offerId,
-      expiresAt: expiresAt.toISOString(),
-      etaSeconds: candidate.etaSeconds,
-      distanceMeters: candidate.distanceMeters,
-      ride: await this.offerRideDetail(ride, candidate, offerId, expiresAt),
-    });
-    const status = await this.status(ride.id);
-    this.app.realtime.publishRide(ride.id, { id: ride.id, status: 'searching', dispatch: status });
-    this.app.realtime.publishDispatch('dispatch.ride', { rideId: ride.id, dispatch: status });
-    return true;
+    const expiresIso = expiresAt.toISOString();
+    for (const { offerId, candidate } of sent) {
+      this.app.realtime.publishUser(candidate.driverUserId, 'ride.offer', {
+        offerId,
+        expiresAt: expiresIso,
+        etaSeconds: candidate.etaSeconds,
+        distanceMeters: candidate.distanceMeters,
+        ride: {
+          ...template,
+          offerId,
+          offerExpiresAt: expiresIso,
+          pickupEtaSeconds: candidate.etaSeconds,
+          pickupDistanceMeters: candidate.distanceMeters,
+        },
+      });
+      await createNotification(this.app.db, {
+        userId: candidate.driverUserId,
+        title: 'Yeni yolculuk isteği',
+        body: `${ride.pickupAddress} → ${ride.destinationAddress}. İlk kabul eden sürücü yolcuyu alır.`,
+        rideId: ride.id,
+      }).catch(() => undefined);
+    }
+    if (sent.length) {
+      this.app.log.info({ rideId: ride.id, offered: sent.length }, 'Dispatch teklifi yakındaki sürücülere yayınlandı');
+      const status = await this.status(ride.id);
+      this.app.realtime.publishRide(ride.id, { id: ride.id, status: 'searching', dispatch: status });
+      this.app.realtime.publishDispatch('dispatch.ride', { rideId: ride.id, dispatch: status });
+    }
+    return sent.length;
   }
 
-  /** Sürücü uygulamasının teklif ekranı için yolculuk özeti. */
-  private async offerRideDetail(ride: RideRow, candidate: DispatchCandidate, offerId: string, expiresAt: Date) {
+  /** Sürücü uygulamasının teklif ekranı için yolculuk özeti (teklif alanları sonra doldurulur). */
+  private async offerRideTemplate(ride: RideRow) {
     const detail = await this.app.db.query<{
       pickupLatitude: number;
       pickupLongitude: number;
@@ -441,21 +472,32 @@ export class DispatchService {
       arrivedAt: null,
       waitSeconds: 0,
       passengerRated: false,
-      offerId,
-      offerExpiresAt: expiresAt.toISOString(),
-      pickupEtaSeconds: candidate.etaSeconds,
-      pickupDistanceMeters: candidate.distanceMeters,
+      offerId: null as string | null,
+      offerExpiresAt: null as string | null,
+      pickupEtaSeconds: null as number | null,
+      pickupDistanceMeters: null as number | null,
     };
   }
 
   /* ---------------------------- yanıtlar ------------------------------ */
 
-  /** Sürücü teklifi kabul eder: yolculuk atanır ve arama sona erer. */
+  /**
+   * Sürücü teklifi kabul eder. Ride satırı önce kilitlenir; ilk COMMIT eden yolcuyu alır,
+   * diğer bekleyen teklifler `lost_race` ile kapanır.
+   */
   async accept(rideId: string, driverUserId: string): Promise<{ rideId: string }> {
     const client = await this.app.db.connect();
     let assigned: { driverId: string; vehicleId: string | null; passengerId: string } | null = null;
+    let losers: Array<{ driverUserId: string }> = [];
     try {
       await client.query('BEGIN');
+      const ride = await client.query<{ status: string; passengerId: string }>(
+        `SELECT status::text AS status, passenger_id AS "passengerId" FROM rides WHERE id=$1 FOR UPDATE`,
+        [rideId],
+      );
+      if (!ride.rows[0]) throw new AppError(404, 'RIDE_NOT_FOUND', 'Yolculuk bulunamadı.');
+      if (ride.rows[0].status !== 'searching')
+        throw new AppError(409, 'RIDE_ALREADY_TAKEN', 'Bu yolculuğu başka bir sürücü aldı.');
       const offer = await client.query<{ id: string; driverId: string; vehicleId: string | null }>(
         `SELECT o.id, o.driver_id AS "driverId", o.vehicle_id AS "vehicleId"
          FROM dispatch_offers o JOIN drivers d ON d.id=o.driver_id
@@ -464,12 +506,6 @@ export class DispatchService {
       );
       const row = offer.rows[0];
       if (!row) throw new AppError(409, 'OFFER_NOT_PENDING', 'Bu teklif artık geçerli değil.');
-      const ride = await client.query<{ status: string; passengerId: string }>(
-        `SELECT status::text AS status, passenger_id AS "passengerId" FROM rides WHERE id=$1 FOR UPDATE`,
-        [rideId],
-      );
-      if (ride.rows[0]?.status !== 'searching')
-        throw new AppError(409, 'RIDE_NOT_SEARCHING', 'Yolculuk artık arama durumunda değil.');
       const expired = await client.query<{ expired: boolean }>(
         `SELECT expires_at <= NOW() AS expired FROM dispatch_offers WHERE id=$1`,
         [row.id],
@@ -480,6 +516,13 @@ export class DispatchService {
         `UPDATE dispatch_offers SET status='accepted', responded_at=NOW() WHERE id=$1`,
         [row.id],
       );
+      const cancelled = await client.query<{ driverUserId: string }>(
+        `UPDATE dispatch_offers o SET status='cancelled', responded_at=NOW(), reason_code='lost_race'
+         FROM drivers d WHERE d.id=o.driver_id AND o.ride_id=$1 AND o.status='pending' AND o.id<>$2
+         RETURNING d.user_id AS "driverUserId"`,
+        [rideId, row.id],
+      );
+      losers = cancelled.rows;
       await client.query(
         `UPDATE dispatch_sessions SET status='assigned', resolved_at=NOW(), updated_at=NOW()
          WHERE ride_id=$1 AND status='searching'`,
@@ -497,7 +540,7 @@ export class DispatchService {
         [rideId, driverUserId],
       );
       await client.query('COMMIT');
-      assigned = { driverId: row.driverId, vehicleId: row.vehicleId, passengerId: ride.rows[0]!.passengerId };
+      assigned = { driverId: row.driverId, vehicleId: row.vehicleId, passengerId: ride.rows[0].passengerId };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -507,11 +550,20 @@ export class DispatchService {
     await this.refreshDriverStats(assigned.driverId);
     await this.store.setAvailability(assigned.driverId, 'on_trip', rideId);
     this.app.realtime.publishUser(driverUserId, 'driver.updated', { availability: 'on_trip', onlineStatus: true });
+    for (const loser of losers) {
+      this.app.realtime.publishUser(loser.driverUserId, 'ride.offer.closed', { rideId, reason: 'lost_race' });
+      await createNotification(this.app.db, {
+        userId: loser.driverUserId,
+        title: 'Yolculuk alındı',
+        body: 'Bu isteği başka bir sürücü daha önce kabul etti.',
+        rideId,
+      }).catch(() => undefined);
+    }
     this.app.realtime.publishDispatch('dispatch.ride', { rideId, dispatch: await this.status(rideId) });
     return { rideId };
   }
 
-  /** Sürücü teklifi reddeder: teklif kapanır ve sıradaki sürücüye geçilir. */
+  /** Sürücü teklifi reddeder: kendi teklifi kapanır; diğer sürücüler hâlâ yanıtlayabilir. */
   async reject(rideId: string, driverUserId: string, reason = 'driver_rejected'): Promise<{ rideId: string }> {
     const result = await this.app.db.query<{ id: string; driverId: string }>(
       `UPDATE dispatch_offers o SET status='rejected', responded_at=NOW(), reason_code=$3
@@ -528,7 +580,6 @@ export class DispatchService {
     );
     await this.refreshDriverStats(row.driverId);
     this.app.realtime.publishUser(driverUserId, 'ride.offer.closed', { rideId, reason });
-    // Sıradaki sürücüye hemen geç.
     await this.pump(rideId);
     return { rideId };
   }
@@ -563,7 +614,7 @@ export class DispatchService {
     );
     for (const row of timedOut.rows) await this.exhaust(row.rideId, 'search_timeout');
 
-    // Açık oturumları ilerlet (teklifi olmayanlar sıradaki sürücüyü alır).
+    // Açık oturumları ilerlet (bekleyen teklifi olmayanlar yeni yayın alır).
     const open = await this.app.db.query<{ rideId: string }>(
       `SELECT s.ride_id AS "rideId" FROM dispatch_sessions s
        WHERE s.status='searching'

@@ -22,8 +22,8 @@ const wsUrl = process.env.SIMULATOR_WS_URL ?? `ws://127.0.0.1:${env.PORT}/ws`;
 
 /**
  * Teklif politikası:
- * - `accept` : teklifi bekleme süresi sonunda kabul eder ve yolculuğu tamamlar (tam akış demosu)
- * - `reject` : hemen reddeder; dağıtımın sıradaki sürücüye geçişini gösterir
+ * - `accept` : teklifi bekleme süresi sonunda kabul eder (eşzamanlı yayında ilk yanıtlayan alır)
+ * - `reject` : hemen reddeder; kalan sürücüler ve yarıçap genişlemesi görünür
  * - `ignore` : yanıt vermez; zaman aşımı akışını gösterir
  *
  * `accept` politikasında sürücü, gerçek sürücü uygulamasına öncelik tanımak için

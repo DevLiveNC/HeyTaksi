@@ -369,12 +369,22 @@ export type LocationPing = z.infer<typeof locationPingSchema>;
 /** Sürücü konum sinyali aralığı (saniye) ve bayat kabul edilme sınırı. */
 export const DRIVER_LOCATION_INTERVAL_SECONDS = 5;
 export const DRIVER_LOCATION_TTL_SECONDS = 60;
-/** Teklif kabul penceresi (saniye): dolduğunda sıradaki sürücüye geçilir. */
+/** Teklif kabul penceresi (saniye): dolduğunda yanıt vermeyen sürücülerin teklifi kapanır. */
 export const DISPATCH_OFFER_TTL_SECONDS = 20;
 /** Bir yolculuk için toplam arama süresi (saniye). */
 export const DISPATCH_SEARCH_TTL_SECONDS = 180;
-/** Arama yarıçapları (metre): her turda bir sonraki yarıçapa genişler. */
+/** Arama yarıçapları (metre): aday kalmazsa bir sonraki yarıçapa genişler. */
 export const DISPATCH_RADIUS_STEPS_METERS = [3000, 6000, 12000] as const;
+/**
+ * Aynı anda teklif gönderilecek en fazla sürücü sayısı.
+ * Yakındaki tüm uygun sürücülere eşzamanlı bildirim gider; ilk kabul eden yolcuyu alır.
+ */
+export const DISPATCH_BROADCAST_MAX_DRIVERS = 50;
+
+/** Skor sırasındaki adaylardan yayın alıcılarını seçer (üst sınır dahil). */
+export function selectBroadcastRecipients<T>(ranked: T[], max = DISPATCH_BROADCAST_MAX_DRIVERS): T[] {
+  return ranked.slice(0, Math.max(0, max));
+}
 
 export interface DriverLocationSnapshot {
   driverId: string;
@@ -462,13 +472,24 @@ export interface DispatchStatusView {
   radiusMeters: number;
   candidatesFound: number;
   offersSent: number;
+  /** Şu anda yanıt beklenen eşzamanlı teklif sayısı (yayın). */
+  pendingOffers: number;
   expiresAt: string | null;
+  /** En yakın bekleyen teklif; yayın sırasında yolcuya ETA göstermek için. */
   currentOffer: {
     driverName: string;
     etaSeconds: number;
     distanceMeters: number;
     expiresAt: string;
   } | null;
+}
+
+/** Frontend harita eklentisinin hangi sağlayıcıyı kullanacağı. */
+export type MapProvider = 'google' | 'osm';
+export interface MapsClientConfig {
+  provider: MapProvider;
+  browserKey: string | null;
+  mapId: string | null;
 }
 
 export interface LiveRideMarker {

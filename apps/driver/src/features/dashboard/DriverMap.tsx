@@ -1,6 +1,7 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createHtmlMarker, GoogleMapHost, type HtmlMapMarker } from "@heytaksi/ui";
 import type { Coordinate, DriverRideDetail, Hotspot, RouteEstimate } from "@heytaksi/shared";
 
 interface Props {
@@ -11,8 +12,12 @@ interface Props {
   className?: string;
 }
 
-/** Sürücü konsolu haritası: sürücü konumu, yoğunluk halkaları ve aktif yolculuk rotası. */
-export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, className = "driver-map" }: Props) {
+interface GoogleHandle {
+  map: google.maps.Map;
+  maps: typeof google.maps;
+}
+
+function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, className = "driver-map" }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapInstance | null>(null);
   const driverMarker = useRef<maplibregl.Marker | null>(null);
@@ -22,9 +27,7 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
     if (!container.current) return;
     const map = new maplibregl.Map({
       container: container.current,
-      style:
-        import.meta.env.VITE_MAP_STYLE_URL ??
-        "https://tiles.openfreemap.org/styles/dark",
+      style: import.meta.env.VITE_MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/dark",
       center: [driverLocation.longitude, driverLocation.latitude],
       zoom: 13,
       attributionControl: {},
@@ -34,10 +37,9 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
     const element = document.createElement("div");
     element.className = "driver-pin";
     element.setAttribute("aria-label", "Sürücü konumu");
-    driverMarker.current = new maplibregl.Marker({ element }).setLngLat([
-      driverLocation.longitude,
-      driverLocation.latitude,
-    ]).addTo(map);
+    driverMarker.current = new maplibregl.Marker({ element })
+      .setLngLat([driverLocation.longitude, driverLocation.latitude])
+      .addTo(map);
     return () => {
       map.remove();
       mapRef.current = null;
@@ -46,17 +48,14 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
     };
   }, []);
 
-  // Sürücü konumu: marker'ı canlı güncelle.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const update = () =>
-      driverMarker.current?.setLngLat([driverLocation.longitude, driverLocation.latitude]);
+    const update = () => driverMarker.current?.setLngLat([driverLocation.longitude, driverLocation.latitude]);
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
   }, [driverLocation]);
 
-  // Yoğunluk halkaları + yolculuk işaretleri.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -79,13 +78,7 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
           source: "hotspots",
           paint: {
             "circle-radius": ["interpolate", ["linear"], ["get", "rideCount"], 1, 16, 12, 40],
-            "circle-color": [
-              "match",
-              ["get", "demandLevel"],
-              "high", "#e5484d",
-              "medium", "#ffcf20",
-              "#3bbb72",
-            ],
+            "circle-color": ["match", ["get", "demandLevel"], "high", "#e5484d", "medium", "#ffcf20", "#3bbb72"],
             "circle-opacity": 0.18,
           },
         });
@@ -95,13 +88,7 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
           source: "hotspots",
           paint: {
             "circle-radius": 6,
-            "circle-color": [
-              "match",
-              ["get", "demandLevel"],
-              "high", "#e5484d",
-              "medium", "#ffcf20",
-              "#3bbb72",
-            ],
+            "circle-color": ["match", ["get", "demandLevel"], "high", "#e5484d", "medium", "#ffcf20", "#3bbb72"],
           },
         });
       }
@@ -124,7 +111,13 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
         ride?.geometry && navigateTo === "destination"
           ? ride.geometry
           : ride && navigateTo === "pickup" && !ride.geometry
-            ? { type: "LineString" as const, coordinates: [[driverLocation.longitude, driverLocation.latitude], [ride.pickup.longitude, ride.pickup.latitude]] as [number, number][] }
+            ? {
+                type: "LineString" as const,
+                coordinates: [
+                  [driverLocation.longitude, driverLocation.latitude],
+                  [ride.pickup.longitude, ride.pickup.latitude],
+                ] as [number, number][],
+              }
             : { type: "LineString" as const, coordinates: [] };
       const routeSource = map.getSource("route") as GeoJSONSource | undefined;
       if (routeSource) routeSource.setData({ type: "Feature", properties: {}, geometry });
@@ -145,14 +138,6 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
         );
         bounds.extend([driverLocation.longitude, driverLocation.latitude]);
         map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
-      } else if (hotspots[0]) {
-        map.fitBounds(
-          new maplibregl.LngLatBounds(
-            [hotspots[0].longitude, hotspots[0].latitude],
-            [hotspots[0].longitude, hotspots[0].latitude],
-          ),
-          { padding: 70, maxZoom: 13 },
-        );
       }
     };
     if (map.isStyleLoaded()) render();
@@ -160,6 +145,118 @@ export function DriverMap({ driverLocation, hotspots = [], ride, navigateTo, cla
   }, [hotspots, ride, navigateTo, driverLocation]);
 
   return <div ref={container} className={className} aria-label="Sürücü haritası" />;
+}
+
+function GoogleDriverLayers({
+  google,
+  driverLocation,
+  hotspots = [],
+  ride,
+  navigateTo,
+}: Props & { google: GoogleHandle }) {
+  const pin = useRef<HtmlMapMarker | null>(null);
+  const markers = useRef<HtmlMapMarker[]>([]);
+  const circles = useRef<google.maps.Circle[]>([]);
+  const line = useRef<google.maps.Polyline | null>(null);
+
+  useEffect(() => {
+    const { map, maps } = google;
+    if (!pin.current) {
+      const element = document.createElement("div");
+      element.className = "driver-pin";
+      element.setAttribute("aria-label", "Sürücü konumu");
+      pin.current = createHtmlMarker(maps, map, { lat: driverLocation.latitude, lng: driverLocation.longitude }, element);
+    } else {
+      pin.current.setPosition({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+    }
+  }, [google, driverLocation]);
+
+  useEffect(() => {
+    const { map, maps } = google;
+    for (const marker of markers.current) marker.setMap(null);
+    markers.current = [];
+    for (const circle of circles.current) circle.setMap(null);
+    circles.current = [];
+
+    for (const spot of hotspots) {
+      const color = spot.demandLevel === "high" ? "#e5484d" : spot.demandLevel === "medium" ? "#ffcf20" : "#3bbb72";
+      circles.current.push(
+        new maps.Circle({
+          map,
+          center: { lat: spot.latitude, lng: spot.longitude },
+          radius: 80 + spot.rideCount * 18,
+          strokeWeight: 0,
+          fillColor: color,
+          fillOpacity: 0.18,
+        }),
+      );
+    }
+
+    const add = (point: Coordinate, kind: string) => {
+      const element = document.createElement("div");
+      element.className = `live-marker ${kind}`;
+      markers.current.push(createHtmlMarker(maps, map, { lat: point.latitude, lng: point.longitude }, element));
+    };
+    if (ride) {
+      if (navigateTo !== "destination") add(ride.pickup, "pickup");
+      add(ride.destination, "destination");
+    }
+
+    const path =
+      ride?.geometry && navigateTo === "destination"
+        ? ride.geometry.coordinates.map(([lng, lat]) => ({ lat, lng }))
+        : ride && navigateTo === "pickup"
+          ? [
+              { lat: driverLocation.latitude, lng: driverLocation.longitude },
+              { lat: ride.pickup.latitude, lng: ride.pickup.longitude },
+            ]
+          : [];
+    if (!line.current) {
+      line.current = new maps.Polyline({
+        path,
+        strokeColor: "#ffcf20",
+        strokeOpacity: 0.9,
+        strokeWeight: 5,
+        map,
+      });
+    } else {
+      line.current.setPath(path);
+      line.current.setMap(map);
+    }
+
+    if (ride) {
+      const bounds = new maps.LatLngBounds();
+      bounds.extend({ lat: ride.pickup.latitude, lng: ride.pickup.longitude });
+      bounds.extend({ lat: ride.destination.latitude, lng: ride.destination.longitude });
+      bounds.extend({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+      map.fitBounds(bounds, 70);
+    } else {
+      map.panTo({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+    }
+  }, [google, hotspots, ride, navigateTo, driverLocation]);
+
+  return null;
+}
+
+/** Sürücü konsolu haritası: Google Maps eklentisi, anahtar yoksa MapLibre. */
+export function DriverMap(props: Props) {
+  const [engine, setEngine] = useState<GoogleHandle | null>(null);
+  const onReady = useCallback((map: google.maps.Map, maps: typeof google.maps) => {
+    setEngine({ map, maps });
+  }, []);
+  return (
+    <>
+      <GoogleMapHost
+        className={props.className ?? "driver-map"}
+        ariaLabel="Sürücü haritası"
+        dark
+        center={{ lat: props.driverLocation.latitude, lng: props.driverLocation.longitude }}
+        onReady={onReady}
+        fallback={<MapLibreDriverMap {...props} />}
+      />
+      {engine ? <GoogleDriverLayers {...props} google={engine} /> : null}
+    </>
+  );
 }
 
 export type { RouteEstimate };

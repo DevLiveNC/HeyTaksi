@@ -141,7 +141,7 @@ export class DriverService {
     await this.app.locationService.syncAvailability(userId, result.availability).catch((error) => {
       this.app.log.warn({ err: error }, 'Sürücü durumu konum defterine yansıtılamadı.');
     });
-    // Dağıtıma kapanan sürücünün bekleyen teklifi düşer; arama sıradaki sürücüyle sürer.
+    // Dağıtıma kapanan sürücünün bekleyen teklifi düşer; diğer sürücüler yanıtlamaya devam eder.
     if (next === 'offline' || next === 'paused')
       await this.app.dispatch.releaseDriver(row.id, `driver_${next}`).catch(() => undefined);
     this.app.realtime.publishUser(userId, 'driver.updated', result);

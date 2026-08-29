@@ -44,4 +44,8 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
       data: await maps.route(input.pickup, input.destination),
     };
   });
+  app.get("/maps-config", { preHandler: app.authenticate }, async () => ({
+    success: true,
+    data: maps.clientConfig(),
+  }));
 };

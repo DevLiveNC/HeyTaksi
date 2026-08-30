@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export {
+  isHeyTaksiFrontendHost,
+  resolveApiBaseUrl,
+  resolveWsBaseUrl,
+} from './client-endpoints.js';
+
 export const roles = ['passenger', 'driver', 'admin', 'dispatcher', 'support'] as const;
 export const roleSchema = z.enum(roles);
 export type Role = z.infer<typeof roleSchema>;

@@ -15,6 +15,7 @@ Frontend SPA rewrite `/api` yollarını **hariç tutar**; aksi halde `POST /api/
 
 - `API_ORIGIN=https://hey-taksi-api.vercel.app` (path yok)
 - `VITE_API_URL=https://hey-taksi-api.vercel.app/api/v1` (doğrudan API; build zamanında gerekir)
+- `VITE_API_URL` **API proje hostu** olmalıdır (`hey-taksi-api.vercel.app`). `https://hey-taksi.vercel.app` bir SPA alias'ıdır; API yoktur ve yönetim girişi tarayıcıda "Sunucuya bağlanılamadı" gösterir. Yanlış host verilirse uygulama aynı origin `/api` proxy'sine düşer.
 - `VITE_WS_URL=wss://<realtime-domain>/ws`
 - `VITE_MAP_STYLE_URL=https://<map-provider>/style` (Google anahtarı yoksa MapLibre düşümü)
 - `VITE_GOOGLE_MAPS_API_KEY=` (Maps JavaScript API; HTTP referrer kısıtlı)

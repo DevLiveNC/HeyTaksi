@@ -1,7 +1,15 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance, MapMouseEvent } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createHtmlMarker, GoogleMapHost } from "@heytaksi/ui";
+import {
+  bindOsmStyleFallback,
+  createHtmlMarker,
+  DEFAULT_MAP_CENTER,
+  defaultMapLngLat,
+  enhanceOsmMap,
+  GoogleMapHost,
+  osmStyleUrl,
+} from "@heytaksi/ui";
 import type { HtmlMapMarker } from "@heytaksi/ui";
 import type { Coordinate, RouteEstimate } from "@heytaksi/shared";
 
@@ -43,13 +51,12 @@ function MapLibreInteractiveMap({
   const mapRef = useRef<MapInstance | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
   const nearbyMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
-  const [styleFailed, setStyleFailed] = useState(false);
   useEffect(() => {
     if (!container.current) return;
     const map = new maplibregl.Map({
       container: container.current,
-      style: import.meta.env.VITE_MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/positron",
-      center: [pickup?.longitude ?? 34.6415, pickup?.latitude ?? 36.8121],
+      style: osmStyleUrl("light"),
+      center: defaultMapLngLat(pickup ?? DEFAULT_MAP_CENTER),
       zoom: 13,
       attributionControl: {},
     });
@@ -57,7 +64,10 @@ function MapLibreInteractiveMap({
     map.on("click", (event: MapMouseEvent) =>
       onMapClick?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }),
     );
-    map.on("error", () => setStyleFailed(true));
+    bindOsmStyleFallback(map);
+    const enhance = () => enhanceOsmMap(map);
+    map.on("load", enhance);
+    map.on("style.load", enhance);
     mapRef.current = map;
     return () => {
       map.remove();
@@ -149,16 +159,7 @@ function MapLibreInteractiveMap({
     else map.once("load", update);
   }, [pickup, destination, route, driverLocation]);
 
-  return (
-    <>
-      <div ref={container} className={className} aria-label="Yolculuk haritası" />
-      {styleFailed && (
-        <div className="map-fallback" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-          Harita altlığı yüklenemedi. Konum işaretleri görünmeye devam eder.
-        </div>
-      )}
-    </>
-  );
+  return <div ref={container} className={className} aria-label="Yolculuk haritası" />;
 }
 
 function GoogleInteractiveMap({
@@ -256,8 +257,8 @@ export function InteractiveMap(props: Props) {
         className={className}
         ariaLabel="Yolculuk haritası"
         center={{
-          lat: props.pickup?.latitude ?? 36.8121,
-          lng: props.pickup?.longitude ?? 34.6415,
+          lat: props.pickup?.latitude ?? DEFAULT_MAP_CENTER.latitude,
+          lng: props.pickup?.longitude ?? DEFAULT_MAP_CENTER.longitude,
         }}
         {...(props.onMapClick
           ? { onClick: (latitude: number, longitude: number) => props.onMapClick?.({ latitude, longitude }) }

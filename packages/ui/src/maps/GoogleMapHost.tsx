@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { googleMapsBrowserKey, isGoogleMapsConfigured, loadGoogleMaps, setGoogleMapsBrowserKey } from './loader';
+import { preferredMapProvider } from './osm';
 import { GOOGLE_MAP_DARK_STYLES, GOOGLE_MAP_LIGHT_STYLES } from './styles';
 import type { GoogleMapsApi, LatLngLiteral } from './google-types';
 
@@ -50,7 +51,9 @@ interface HostProps {
 }
 
 /**
- * Google Maps JavaScript API eklentisi. Anahtar yoksa veya yükleme başarısızsa `fallback` (MapLibre) çizilir.
+ * Google Maps JavaScript API eklentisi.
+ * Varsayılan sağlayıcı OSM/MapLibre'dir (`fallback`). Google yalnızca
+ * `VITE_MAP_PROVIDER=google` ve geçerli anahtar varken yüklenir.
  */
 export function GoogleMapHost({
   center,
@@ -68,7 +71,8 @@ export function GoogleMapHost({
   readyRef.current = onReady;
   const clickRef = useRef(onClick);
   clickRef.current = onClick;
-  const configured = Boolean(key || isGoogleMapsConfigured());
+  const configured =
+    preferredMapProvider() === 'google' && Boolean(key || isGoogleMapsConfigured());
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {

@@ -1,7 +1,13 @@
 import type { Coordinate, MapsClientConfig, RouteEstimate } from "@heytaksi/shared";
+import { DEFAULT_MAP_CENTER, MAP_LABEL_LANGUAGE, OSM_LIGHT_STYLE_URL } from "@heytaksi/shared";
 import { env } from "../../config/env.js";
 import { AppError } from "../../core/errors/app-error.js";
 import { decodeGooglePolyline } from "./google-polyline.js";
+import {
+  NOMINATIM_HEADERS,
+  buildNominatimReverseUrl,
+  buildNominatimSearchUrl,
+} from "./nominatim.js";
 
 const EARTH_RADIUS_METERS = 6_371_000;
 /** İki nokta arası büyük daire mesafesi (metre). */
@@ -39,21 +45,26 @@ function googleKey(): string | undefined {
 /**
  * Harita altyapısı.
  *
- * Google Maps API anahtarı varsa Geocoding + Directions kullanılır; yoksa
- * Nominatim / OSRM. Anahtar hatalıysa ve MAP_FALLBACK açıksa OSM'ye düşülür.
+ * Şimdilik OSM (Nominatim + OSRM) birincil sağlayıcıdır. Google Maps API
+ * anahtarı ve MAP_PROVIDER=google varsa Geocoding + Directions kullanılır;
+ * anahtar hatalıysa ve MAP_FALLBACK açıksa OSM'ye düşülür.
  */
 export class MapService {
   clientConfig(): MapsClientConfig {
     const browserKey = env.GOOGLE_MAPS_BROWSER_KEY ?? null;
+    const googleReady = Boolean(browserKey || env.GOOGLE_MAPS_API_KEY);
     return {
-      provider: browserKey || env.GOOGLE_MAPS_API_KEY ? "google" : "osm",
-      browserKey,
-      mapId: env.GOOGLE_MAPS_MAP_ID ?? null,
+      provider: env.MAP_PROVIDER === "google" && googleReady ? "google" : "osm",
+      browserKey: env.MAP_PROVIDER === "google" ? browserKey : null,
+      mapId: env.MAP_PROVIDER === "google" ? (env.GOOGLE_MAPS_MAP_ID ?? null) : null,
+      styleUrl: OSM_LIGHT_STYLE_URL,
+      labelLanguage: MAP_LABEL_LANGUAGE,
+      defaultCenter: DEFAULT_MAP_CENTER,
     };
   }
 
   async search(query: string, near?: { latitude: number; longitude: number }) {
-    if (googleKey()) {
+    if (env.MAP_PROVIDER === "google" && googleKey()) {
       try {
         return await this.googleSearch(query, near);
       } catch (error) {
@@ -64,7 +75,7 @@ export class MapService {
   }
 
   async reverse(latitude: number, longitude: number) {
-    if (googleKey()) {
+    if (env.MAP_PROVIDER === "google" && googleKey()) {
       try {
         return await this.googleReverse(latitude, longitude);
       } catch (error) {
@@ -75,7 +86,7 @@ export class MapService {
   }
 
   async route(pickup: Coordinate, destination: Coordinate): Promise<RouteEstimate> {
-    if (googleKey()) {
+    if (env.MAP_PROVIDER === "google" && googleKey()) {
       try {
         return await this.googleRoute(pickup, destination);
       } catch (error) {
@@ -91,8 +102,6 @@ export class MapService {
     const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
     url.searchParams.set("address", query);
     url.searchParams.set("language", "tr");
-    url.searchParams.set("region", "tr");
-    url.searchParams.set("components", "country:TR");
     url.searchParams.set("key", googleKey()!);
     if (near) {
       url.searchParams.set("bounds", `${near.latitude - 0.4},${near.longitude - 0.4}|${near.latitude + 0.4},${near.longitude + 0.4}`);
@@ -142,7 +151,6 @@ export class MapService {
     url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
     url.searchParams.set("mode", "driving");
     url.searchParams.set("language", "tr");
-    url.searchParams.set("region", "tr");
     url.searchParams.set("key", googleKey()!);
     const payload = await this.googleJson<{
       status: string;
@@ -185,22 +193,12 @@ export class MapService {
   /* ------------------------------- OSM ---------------------------------- */
 
   private async nominatimSearch(query: string, near?: { latitude: number; longitude: number }) {
-    const url = new URL("/search", env.GEOCODING_URL);
-    url.searchParams.set("q", query);
-    url.searchParams.set("format", "jsonv2");
-    url.searchParams.set("addressdetails", "1");
-    url.searchParams.set("limit", "6");
-    url.searchParams.set("countrycodes", "tr");
-    if (near)
-      url.searchParams.set(
-        "viewbox",
-        `${near.longitude - 0.5},${near.latitude + 0.5},${near.longitude + 0.5},${near.latitude - 0.5}`,
-      );
+    const url = buildNominatimSearchUrl(env.GEOCODING_URL, query, near);
     try {
       const response = await fetch(url, {
         headers: {
           "user-agent": env.MAP_SERVICE_USER_AGENT,
-          "accept-language": "tr",
+          ...NOMINATIM_HEADERS,
         },
         signal: AbortSignal.timeout(8_000),
       });
@@ -223,7 +221,7 @@ export class MapService {
     } catch (error) {
       if (!env.MAP_FALLBACK || error instanceof AppError) throw error;
       const seed = [...query].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-      const center = near ?? { latitude: 36.8121, longitude: 34.6415 };
+      const center = near ?? DEFAULT_MAP_CENTER;
       return [
         {
           id: `fallback-${seed}`,
@@ -237,15 +235,12 @@ export class MapService {
   }
 
   private async nominatimReverse(latitude: number, longitude: number) {
-    const url = new URL("/reverse", env.GEOCODING_URL);
-    url.searchParams.set("lat", String(latitude));
-    url.searchParams.set("lon", String(longitude));
-    url.searchParams.set("format", "jsonv2");
+    const url = buildNominatimReverseUrl(env.GEOCODING_URL, latitude, longitude);
     try {
       const response = await fetch(url, {
         headers: {
           "user-agent": env.MAP_SERVICE_USER_AGENT,
-          "accept-language": "tr",
+          ...NOMINATIM_HEADERS,
         },
         signal: AbortSignal.timeout(8_000),
       });

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import argon2 from 'argon2';
 import pg from 'pg';
 import { z } from 'zod';
+import { DEFAULT_MAP_CENTER } from '@heytaksi/shared';
 import { env } from '../../config/env.js';
 
 /**
@@ -212,10 +213,10 @@ try {
       );
       await client.query(
         `INSERT INTO driver_locations(driver_id, latitude, longitude, heading, availability, recorded_at)
-         VALUES($1, 36.8121, 34.6415, 90, 'offline', NOW())
+         VALUES($1, $2, $3, 90, 'offline', NOW())
          ON CONFLICT (driver_id) DO UPDATE SET
            latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, recorded_at = NOW()`,
-        [driverId],
+        [driverId, DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude],
       );
     }
 

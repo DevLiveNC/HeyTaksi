@@ -1554,9 +1554,26 @@ input:focus-visible {
 .map-card.real {
   background: #e9e9e1;
 }
+.home-live-map-wrap,
+.booking-full-map-wrap,
+.review-map-wrap,
+.active-ride-map-wrap,
+.detail-live-map-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
 .home-live-map {
   position: absolute;
   inset: 0;
+}
+.home-live-map .maplibregl-map,
+.booking-full-map .maplibregl-map,
+.review-map .maplibregl-map,
+.active-ride-map .maplibregl-map,
+.detail-live-map .maplibregl-map {
+  width: 100%;
+  height: 100%;
 }
 .maplibregl-map {
   font-family: inherit;

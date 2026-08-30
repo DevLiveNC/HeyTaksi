@@ -27,11 +27,11 @@ interface SeedRide {
 }
 
 const routes: Array<[string, string]> = [
-  ['Mersin Marina', 'Forum Mersin'],
-  ['50. Yıl Mahallesi', 'Mersin Gar'],
-  ['Çiftlikköy Kampüs', 'Adnan Menderes Bulvarı'],
-  ['Mezitli Sahil', 'Tarsus Yolu Otogarı'],
-  ['Yenişehir Camii', 'Mersin Devlet Hastanesi'],
+  ['Dereboyu, Lefkoşa', 'Lefkoşa Devlet Hastanesi'],
+  ['Gönyeli', 'Yakın Doğu Üniversitesi'],
+  ['Girne Limanı', 'Bellapais Manastırı'],
+  ['Gazimağusa Suriçi', 'Salamis Harabeleri'],
+  ['Bandabuliya, Lefkoşa', 'Kaymaklı'],
 ];
 
 const point = (base: number, index: number) => Math.round((base + (index % 3) * 0.01) * 1e6) / 1e6;
@@ -42,8 +42,8 @@ for (let index = 0; index < 16; index += 1) {
   const durationMinutes = Math.round(8 + distanceKm * 2.2);
   rideSeeds.push({
     hoursAgo: index < 4 ? 3 - index * 0.7 : 20 + index * 17,
-    pickup: [point(36.8121, index), point(34.6415, index + 1), `${pickupName}, Mersin`],
-    destination: [point(36.7709, index + 2), point(34.5915, index), `${destinationName}, Mersin`],
+    pickup: [point(35.1856, index), point(33.3823, index + 1), pickupName],
+    destination: [point(35.175, index + 2), point(33.361, index), destinationName],
     distanceKm,
     durationMinutes,
     fare: Math.round((45 + distanceKm * 18 + durationMinutes * 1.2) * (1 + (index % 3) * 0.1)),
@@ -93,7 +93,12 @@ try {
 
   // Demo yolculukları yeniden üret: eski demo kayıtları temizlenir.
   await client.query(
-    `DELETE FROM rides WHERE passenger_id=$1 AND (pickup_address LIKE '%Mersin%' OR destination_address LIKE '%Mersin%')`,
+    `DELETE FROM rides WHERE passenger_id=$1 AND (
+       pickup_address LIKE '%Mersin%' OR destination_address LIKE '%Mersin%'
+       OR pickup_address LIKE '%Lefkoşa%' OR destination_address LIKE '%Lefkoşa%'
+       OR pickup_address LIKE '%Girne%' OR pickup_address LIKE '%Gazimağusa%'
+       OR pickup_address LIKE '%Gönyeli%' OR pickup_address LIKE '%Kaymaklı%'
+     )`,
     [passengerUserId],
   );
 

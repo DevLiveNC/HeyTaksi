@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { DRIVER_LOCATION_INTERVAL_SECONDS } from '@heytaksi/shared';
+import { DEFAULT_MAP_CENTER, DRIVER_LOCATION_INTERVAL_SECONDS } from '@heytaksi/shared';
 import { env } from '../../config/env.js';
 
 /**
@@ -14,8 +14,8 @@ import { env } from '../../config/env.js';
 const drivers = ['ayse', 'mehmet', 'zeynep', 'hasan', 'elif', 'burak', 'canan', 'okan'];
 const password = process.env.DEMO_FLEET_PASSWORD ?? 'FleetDemo2026!';
 const centre = {
-  latitude: Number(process.env.DEMO_FLEET_CENTER_LAT ?? 36.8121),
-  longitude: Number(process.env.DEMO_FLEET_CENTER_LON ?? 34.6415),
+  latitude: Number(process.env.DEMO_FLEET_CENTER_LAT ?? DEFAULT_MAP_CENTER.latitude),
+  longitude: Number(process.env.DEMO_FLEET_CENTER_LON ?? DEFAULT_MAP_CENTER.longitude),
 };
 const apiUrl = process.env.SIMULATOR_API_URL ?? `http://127.0.0.1:${env.PORT}${env.API_PREFIX}`;
 const wsUrl = process.env.SIMULATOR_WS_URL ?? `ws://127.0.0.1:${env.PORT}/ws`;

@@ -10,20 +10,28 @@ import {
   CarFront,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { DEFAULT_MAP_CENTER } from "@heytaksi/ui";
 import { useDriver } from "../../state/DriverContext";
-import { useDriverLocation } from "../../hooks/useDriverLocation";
 import { DriverMap } from "./DriverMap";
-import { RideOfferSheet } from "../offer/RideOfferSheet";
 
 const demandLabels = { high: "Yoğun", medium: "Artan", low: "Sakin" } as const;
 
 export function DashboardPage() {
-  const { dashboard, ride, error, setAvailability, busy, socket } = useDriver();
+  const {
+    dashboard,
+    ride,
+    error,
+    setAvailability,
+    busy,
+    location,
+    gpsOk,
+    locationError,
+    hasFix,
+    request,
+    blocked,
+    locating,
+  } = useDriver();
   const availability = dashboard?.availability ?? "offline";
   const onDuty = availability !== "offline";
-  // Konum sinyali açık soket üzerinden gider; soket kapalıysa REST'e düşer.
-  const { location, hasFix, request, blocked, loading: locating } = useDriverLocation(onDuty, socket, ride?.id ?? null);
   const offerPending = Boolean(ride?.offerId);
 
   if (!dashboard)
@@ -88,11 +96,12 @@ export function DashboardPage() {
               ? locating
                 ? "Konum izni isteniyor…"
                 : blocked
-                ? "Çevrim içi olmak için önce konum izni vermen gerekir."
-                : "Anahtarı açtığında yakındaki yolculuk talepleri sana gelmeye başlar."
+                  ? "Çevrim içi olmak için önce konum izni vermen gerekir."
+                  : "Anahtarı açtığında yakındaki yolculuk talepleri sana gelmeye başlar."
               : "Çevrim içi olmak için sürücü doğrulamanın tamamlanması gerekir."}
           </p>
         )}
+        {onDuty && locationError && !gpsOk && <p className="duty-location-warn">{locationError}</p>}
       </section>
 
       {ride && !offerPending && (
@@ -129,7 +138,7 @@ export function DashboardPage() {
         </article>
       </div>
 
-      <DriverMap driverLocation={location ?? DEFAULT_MAP_CENTER} hotspots={dashboard.hotspots} ride={ride} navigateTo={ride?.status === "in_progress" || ride?.status === "started" ? "destination" : "pickup"} />
+      <DriverMap driverLocation={location} hotspots={dashboard.hotspots} ride={ride} navigateTo={ride?.status === "in_progress" || ride?.status === "started" ? "destination" : "pickup"} />
 
       <section className="hotspots-card" aria-labelledby="hotspot-title">
         <div className="section-heading">
@@ -158,7 +167,6 @@ export function DashboardPage() {
       </section>
 
       {error && <div className="driver-error">{error}</div>}
-      {offerPending && <RideOfferSheet />}
     </div>
   );
 }

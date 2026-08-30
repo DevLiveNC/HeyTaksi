@@ -661,6 +661,38 @@ export class DispatchService {
       this.app.realtime.publishUser(row.driverUserId, 'ride.offer.closed', { rideId, reason });
   }
 
+  /**
+   * Sürücü konum verdiğinde veya çevrim içi olduğunda, yakındaki açık aramalara
+   * hemen teklif gider. Vercel gibi kısa ömürlü ortamlarda `sweep` yaşamaz;
+   * bu yüzden sürücü sinyali aramayı yeniden ilerletir.
+   */
+  async considerNearbySearches(driverId: string): Promise<void> {
+    const location = await this.store.get(driverId);
+    if (!location || !isDriverDispatchable(location.availability)) return;
+    const radius = DISPATCH_RADIUS_STEPS_METERS[DISPATCH_RADIUS_STEPS_METERS.length - 1]!;
+    const latitudeDelta = radius / 111_000;
+    const longitudeDelta = radius / (111_000 * Math.max(0.2, Math.cos((location.latitude * Math.PI) / 180)));
+    const sessions = await this.app.db.query<{ rideId: string }>(
+      `SELECT s.ride_id AS "rideId"
+       FROM dispatch_sessions s
+       JOIN rides r ON r.id = s.ride_id
+       JOIN ride_locations pl ON pl.ride_id = r.id AND pl.location_type = 'pickup'
+       WHERE s.status = 'searching' AND r.status = 'searching'
+         AND pl.latitude BETWEEN $2 AND $3 AND pl.longitude BETWEEN $4 AND $5
+         AND NOT EXISTS (SELECT 1 FROM dispatch_offers o WHERE o.driver_id = $1 AND o.status = 'pending')
+       ORDER BY s.started_at ASC
+       LIMIT 20`,
+      [
+        driverId,
+        location.latitude - latitudeDelta,
+        location.latitude + latitudeDelta,
+        location.longitude - longitudeDelta,
+        location.longitude + longitudeDelta,
+      ],
+    );
+    for (const row of sessions.rows) await this.pump(row.rideId);
+  }
+
   /** Sürücü çevrim dışı olur veya mola verirse bekleyen teklifi düşer ve arama devam eder. */
   async releaseDriver(driverId: string, reason = 'driver_unavailable'): Promise<void> {
     const cancelled = await this.app.db.query<{ rideId: string; driverUserId: string }>(

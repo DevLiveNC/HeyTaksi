@@ -2,6 +2,7 @@ import {
   DRIVER_LOCATION_TTL_SECONDS,
   estimateEtaSeconds,
   haversineMeters,
+  isDriverDispatchable,
   type DispatchOverview,
   type DriverAvailability,
   type DriverLocationSnapshot,
@@ -109,6 +110,13 @@ export class LiveLocationService {
         rating: context.rating,
         ageSeconds: 0,
       } satisfies LiveDriverMarker);
+    }
+
+    // Çevrim içi sürücü görünür olur olmaz yakındaki açık aramalara teklif gider.
+    if (isDriverDispatchable(context.availability)) {
+      await this.app.dispatch.considerNearbySearches(context.driverId).catch((error) => {
+        this.app.log.warn({ err: error, driverId: context.driverId }, 'Yakındaki aramalar sürücü sinyalinde ilerletilemedi.');
+      });
     }
     return snapshot;
   }

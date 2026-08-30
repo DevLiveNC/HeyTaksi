@@ -15,9 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RideStatus } from "@heytaksi/shared";
-import { DEFAULT_MAP_CENTER } from "@heytaksi/ui";
 import { useDriver } from "../../state/DriverContext";
-import { useDriverLocation } from "../../hooks/useDriverLocation";
 import { DriverMap } from "../dashboard/DriverMap";
 import { RideChatSheet } from "./RideChatSheet";
 import { SafeCallSheet } from "./SafeCallSheet";
@@ -38,12 +36,10 @@ const stepCopy: Record<string, { title: string; caption: string }> = {
 /** Yolculuk akışı: Kabul → Yolcuya git → Varıldı → Başlat → Sürüyor → Tamamla. */
 export function ActiveRidePage() {
   const navigate = useNavigate();
-  const { ride, busy, error, advance, startRide, dismissRide, markPassengerRated, refreshRide, socket } = useDriver();
+  const { ride, busy, error, advance, startRide, dismissRide, markPassengerRated, refreshRide, location } = useDriver();
   const [sheet, setSheet] = useState<"chat" | "call" | "cancel" | null>(null);
   const [waitSeconds, setWaitSeconds] = useState(0);
   const [stars, setStars] = useState(5);
-  // Aktif yolculukta konum, yolcunun canlı takibi için yolculuk kanalına da işlenir.
-  const { location } = useDriverLocation(true, socket, ride?.id ?? null);
   const status = (ride?.status ?? "driver_assigned") as RideStatus;
 
   useEffect(() => {
@@ -86,7 +82,7 @@ export function ActiveRidePage() {
   return (
     <div className="ride-page">
       <DriverMap
-        driverLocation={location ?? DEFAULT_MAP_CENTER}
+        driverLocation={location}
         ride={ride}
         navigateTo={status === "started" || status === "in_progress" ? "destination" : "pickup"}
         className="ride-map"

@@ -12,13 +12,13 @@ export function MapCanvas() {
   const { drivers, closestEtaSeconds, loading } = useNearbyDrivers(geo.location);
 
   useEffect(() => {
-    if (!geo.isFallback || !booking.pickup) booking.setPickup(geo.location);
+    if (geo.location) booking.setPickup(geo.location);
   }, [geo.location, geo.isFallback]);
 
   return (
     <section className="map-card real" aria-label="Canlı konum haritası">
       <InteractiveMap pickup={geo.location} nearbyDrivers={drivers} className="home-live-map" />
-      <button className="locate-button" onClick={geo.request} aria-label="Konumumu bul">
+      <button className="locate-button" onClick={() => void geo.request()} aria-label="Konumumu bul">
         <LocateFixed size={19} />
       </button>
       <div className="map-status">
@@ -37,7 +37,7 @@ export function MapCanvas() {
             ? "Konum bulunuyor…"
             : closestEtaSeconds != null
               ? `En yakını ${Math.max(1, Math.round(closestEtaSeconds / 60))} dk uzaklıkta`
-              : geo.location.address}
+            : geo.location?.address ?? "Konum bekleniyor"}
         </span>
       </div>
     </section>

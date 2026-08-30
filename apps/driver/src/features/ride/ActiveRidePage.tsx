@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RideStatus } from "@heytaksi/shared";
+import { DEFAULT_MAP_CENTER } from "@heytaksi/ui";
 import { useDriver } from "../../state/DriverContext";
 import { useDriverLocation } from "../../hooks/useDriverLocation";
 import { DriverMap } from "../dashboard/DriverMap";
@@ -85,7 +86,7 @@ export function ActiveRidePage() {
   return (
     <div className="ride-page">
       <DriverMap
-        driverLocation={location}
+        driverLocation={location ?? DEFAULT_MAP_CENTER}
         ride={ride}
         navigateTo={status === "started" || status === "in_progress" ? "destination" : "pickup"}
         className="ride-map"

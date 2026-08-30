@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useCallback, type PropsWithChildren } from "react";
-import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from "@heytaksi/ui";
+import { AuthGate, AuthPage, DeviceLocationProvider, LocationPermissionGate, MapsKeyProvider, useAuth } from "@heytaksi/ui";
 import { DriverLayout } from "../components/DriverLayout";
 import { DriverProvider } from "../state/DriverContext";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
@@ -11,7 +11,9 @@ import { driverApi } from "../services/driverApi";
 
 function DriverApp() {
   return (
+    <DeviceLocationProvider>
     <DriverProvider>
+      <LocationPermissionGate audience="driver" />
       <Routes>
         <Route element={<DriverLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -22,6 +24,7 @@ function DriverApp() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </DriverProvider>
+    </DeviceLocationProvider>
   );
 }
 

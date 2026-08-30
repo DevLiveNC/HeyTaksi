@@ -30,17 +30,22 @@ export function DestinationSearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!geo.isFallback || !booking.pickup) booking.setPickup(geo.location);
+    if (geo.location) booking.setPickup(geo.location);
   }, [geo.location, geo.isFallback]);
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
       return;
     }
+    const near = booking.pickup ?? geo.location;
+    if (!near) {
+      setResults([]);
+      return;
+    }
     const timer = setTimeout(() => {
       setLoading(true);
       locationApi
-        .search(auth.authorizedFetch, query, booking.pickup ?? geo.location)
+        .search(auth.authorizedFetch, query, near)
         .then(setResults)
         .catch((cause) =>
           setError(cause instanceof Error ? cause.message : "Adres aranamadı"),
@@ -112,7 +117,7 @@ export function DestinationSearchPage() {
               readOnly
             />
           </label>
-          <button onClick={geo.request} aria-label="Mevcut konumu kullan">
+          <button onClick={() => void geo.request()} aria-label="Mevcut konumu kullan">
             <Crosshair />
           </button>
           <i className="destination-dot" />
@@ -133,10 +138,9 @@ export function DestinationSearchPage() {
             <MapPin />
           </button>
         </div>
-        {geo.permission === "denied" && (
+        {geo.blocked && (
           <p className="permission-warning">
-            Konum izni kapalı. Varsayılan konumu kullanabilir veya tarayıcı
-            ayarlarından izin verebilirsin.
+            Konum izni kapalı. Yakındaki taksileri ve doğru alış noktasını kullanmak için konuma izin vermen gerekir.
           </p>
         )}
         {pinMode && (

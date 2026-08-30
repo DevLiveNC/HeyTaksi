@@ -10,6 +10,7 @@ import {
   CarFront,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { DEFAULT_MAP_CENTER } from "@heytaksi/ui";
 import { useDriver } from "../../state/DriverContext";
 import { useDriverLocation } from "../../hooks/useDriverLocation";
 import { DriverMap } from "./DriverMap";
@@ -22,7 +23,7 @@ export function DashboardPage() {
   const availability = dashboard?.availability ?? "offline";
   const onDuty = availability !== "offline";
   // Konum sinyali açık soket üzerinden gider; soket kapalıysa REST'e düşer.
-  const { location } = useDriverLocation(onDuty, socket, ride?.id ?? null);
+  const { location, hasFix, request, blocked, loading: locating } = useDriverLocation(onDuty, socket, ride?.id ?? null);
   const offerPending = Boolean(ride?.offerId);
 
   if (!dashboard)
@@ -47,7 +48,19 @@ export function DashboardPage() {
             aria-checked={onDuty}
             aria-label={onDuty ? "Çevrim dışı ol" : "Çevrim içi ol"}
             disabled={busy || availability === "on_trip" || (onDuty && dashboard.verificationStatus !== "verified")}
-            onClick={() => void setAvailability(onDuty ? "offline" : "online")}
+            onClick={() => {
+              if (onDuty) {
+                void setAvailability("offline");
+                return;
+              }
+              if (hasFix) {
+                void setAvailability("online");
+                return;
+              }
+              void request().then((allowed) => {
+                if (allowed) void setAvailability("online");
+              });
+            }}
           >
             <span className="duty-knob">
               <Power size={16} />
@@ -72,7 +85,11 @@ export function DashboardPage() {
         ) : (
           <p className="duty-hint">
             {dashboard.verificationStatus === "verified"
-              ? "Anahtarı açtığında yakındaki yolculuk talepleri sana gelmeye başlar."
+              ? locating
+                ? "Konum izni isteniyor…"
+                : blocked
+                ? "Çevrim içi olmak için önce konum izni vermen gerekir."
+                : "Anahtarı açtığında yakındaki yolculuk talepleri sana gelmeye başlar."
               : "Çevrim içi olmak için sürücü doğrulamanın tamamlanması gerekir."}
           </p>
         )}
@@ -112,7 +129,7 @@ export function DashboardPage() {
         </article>
       </div>
 
-      <DriverMap driverLocation={location} hotspots={dashboard.hotspots} ride={ride} navigateTo={ride?.status === "in_progress" || ride?.status === "started" ? "destination" : "pickup"} />
+      <DriverMap driverLocation={location ?? DEFAULT_MAP_CENTER} hotspots={dashboard.hotspots} ride={ride} navigateTo={ride?.status === "in_progress" || ride?.status === "started" ? "destination" : "pickup"} />
 
       <section className="hotspots-card" aria-labelledby="hotspot-title">
         <div className="section-heading">

@@ -54,10 +54,10 @@ export function HomePage() {
 
   return (
     <div className="home-page">
-      <div className="location-kicker">
+      <div className={`location-kicker ${geo.blocked ? "needs-permission" : ""}`}>
         <MapPin size={13} />
         <span>Mevcut konum</span>
-        <strong>{geo.location.address}</strong>
+        <strong>{geo.location?.address ?? (geo.blocked ? "Konum izni gerekli" : "Konum alınıyor…")}</strong>
       </div>
       <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}>
         <MapCanvas />

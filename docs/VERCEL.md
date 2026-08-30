@@ -17,8 +17,9 @@ Frontend SPA rewrite `/api` yollarını **hariç tutar**; aksi halde `POST /api/
 - `VITE_API_URL=https://hey-taksi-api.vercel.app/api/v1` (doğrudan API; build zamanında gerekir)
 - `VITE_API_URL` **API proje hostu** olmalıdır (`hey-taksi-api.vercel.app`). `https://hey-taksi.vercel.app` bir SPA alias'ıdır; API yoktur ve yönetim girişi tarayıcıda "Sunucuya bağlanılamadı" gösterir. Yanlış host verilirse uygulama aynı origin `/api` proxy'sine düşer.
 - `VITE_WS_URL=wss://<realtime-domain>/ws`
-- `VITE_MAP_STYLE_URL=https://<map-provider>/style` (Google anahtarı yoksa MapLibre düşümü)
-- `VITE_GOOGLE_MAPS_API_KEY=` (Maps JavaScript API; HTTP referrer kısıtlı)
+- `VITE_MAP_PROVIDER=osm` (şimdilik OpenStreetMap; Google için `google`)
+- `VITE_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty` (Türkçe etiket + POI)
+- `VITE_GOOGLE_MAPS_API_KEY=` (Maps JavaScript API; yalnızca `VITE_MAP_PROVIDER=google` iken)
 - API Project: `GOOGLE_MAPS_API_KEY` (Directions/Geocoding), isteğe bağlı `GOOGLE_MAPS_BROWSER_KEY`
 
 API Project'ine Neon `DATABASE_URL` (veya Vercel Postgres `POSTGRES_URL`) ile `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` eklenmelidir. `CORS_ORIGINS` içine frontend origin'lerini yazabilirsiniz; Hey Taksi `*.vercel.app` hostları ayrıca otomatik kabul edilir.

@@ -1,5 +1,5 @@
-/** Varsayılan harita merkezi (Mersin). Gerçek GPS yerine kullanılamaz. */
-export const DEFAULT_MAP_CENTER = { latitude: 36.8121, longitude: 34.6415 };
+/** Varsayılan harita merkezi (Lefkoşa, KKTC). Gerçek GPS yerine kullanılamaz. */
+export { DEFAULT_MAP_CENTER } from '@heytaksi/shared';
 
 export type GeoPermission = PermissionState | 'unknown' | 'unsupported';
 

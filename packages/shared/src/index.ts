@@ -5,6 +5,15 @@ export {
   resolveApiBaseUrl,
   resolveWsBaseUrl,
 } from './client-endpoints.js';
+export {
+  DEFAULT_MAP_CENTER,
+  KKTC_VIEWBOX,
+  MAP_LABEL_LANGUAGE,
+  OSM_DARK_STYLE_URL,
+  OSM_LIGHT_STYLE_URL,
+  kktcViewboxParam,
+  nearbyViewboxParam,
+} from './map-region.js';
 
 export const roles = ['passenger', 'driver', 'admin', 'dispatcher', 'support'] as const;
 export const roleSchema = z.enum(roles);
@@ -490,12 +499,15 @@ export interface DispatchStatusView {
   } | null;
 }
 
-/** Frontend harita eklentisinin hangi sağlayıcıyı kullanacağı. */
+/** Frontend harita eklentisinin hangi sağlayıcıyı kullanacağı. Varsayılan osm (Google sonra). */
 export type MapProvider = 'google' | 'osm';
 export interface MapsClientConfig {
   provider: MapProvider;
   browserKey: string | null;
   mapId: string | null;
+  styleUrl: string | null;
+  labelLanguage: string;
+  defaultCenter: { latitude: number; longitude: number };
 }
 
 export interface LiveRideMarker {

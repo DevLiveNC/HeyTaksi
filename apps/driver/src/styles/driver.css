@@ -323,7 +323,11 @@ body {
   height: 280px;
 }
 .driver-map .gm-style,
-.ride-map .gm-style {
+.ride-map .gm-style,
+.driver-map.maplibregl-map,
+.ride-map.maplibregl-map,
+.driver-map .maplibregl-map,
+.ride-map .maplibregl-map {
   width: 100%;
   height: 100%;
 }

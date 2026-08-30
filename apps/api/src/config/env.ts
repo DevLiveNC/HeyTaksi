@@ -59,6 +59,8 @@ const schema = z.object({
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.string().min(1).optional(),
   ),
+  /** Varsayılan osm: Google Maps sonra bağlanacak. */
+  MAP_PROVIDER: z.enum(['osm', 'google']).default('osm'),
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174,http://localhost:5175'),
 });
 

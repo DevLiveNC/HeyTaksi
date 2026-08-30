@@ -19,6 +19,14 @@ export {
 export { createHtmlMarker, type HtmlMapMarker } from './maps/html-marker';
 export { GOOGLE_MAP_DARK_STYLES, GOOGLE_MAP_LIGHT_STYLES } from './maps/styles';
 export {
+  bindOsmStyleFallback,
+  defaultMapLngLat,
+  enhanceOsmMap,
+  osmStyleUrl,
+  preferredMapProvider,
+  OSM_RASTER_FALLBACK_STYLE,
+} from './maps/osm';
+export {
   DEFAULT_MAP_CENTER,
   coordinatesClose,
   geolocationSupported,

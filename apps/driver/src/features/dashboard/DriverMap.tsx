@@ -1,7 +1,14 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createHtmlMarker, GoogleMapHost, type HtmlMapMarker } from "@heytaksi/ui";
+import {
+  bindOsmStyleFallback,
+  createHtmlMarker,
+  enhanceOsmMap,
+  GoogleMapHost,
+  osmStyleUrl,
+  type HtmlMapMarker,
+} from "@heytaksi/ui";
 import type { Coordinate, DriverRideDetail, Hotspot, RouteEstimate } from "@heytaksi/shared";
 
 interface Props {
@@ -28,12 +35,16 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
     if (!container.current) return;
     const map = new maplibregl.Map({
       container: container.current,
-      style: import.meta.env.VITE_MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/dark",
+      style: osmStyleUrl("light"),
       center: [driverLocation.longitude, driverLocation.latitude],
       zoom: 13,
       attributionControl: {},
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    bindOsmStyleFallback(map);
+    const enhance = () => enhanceOsmMap(map);
+    map.on("load", enhance);
+    map.on("style.load", enhance);
     mapRef.current = map;
     const element = document.createElement("div");
     element.className = "driver-pin";
@@ -266,7 +277,7 @@ function GoogleDriverLayers({
   return null;
 }
 
-/** Sürücü konsolu haritası: Google Maps eklentisi, anahtar yoksa MapLibre. */
+/** Sürücü konsolu haritası: OSM/MapLibre; Google yalnızca VITE_MAP_PROVIDER=google iken. */
 export function DriverMap(props: Props) {
   const [engine, setEngine] = useState<GoogleHandle | null>(null);
   const onReady = useCallback((map: google.maps.Map, maps: typeof google.maps) => {

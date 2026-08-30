@@ -79,13 +79,13 @@ Faz 3 yolcu deneyimi `apps/passenger/src/features` altında `home`, `rides`, `wa
 
 ## Konum ve yolculuk altyapısı
 
-Harita eklentisi **Google Maps JavaScript API** kullanır (Directions + Geocoding sunucuda, Maps JS tarayıcıda). Anahtar yoksa geliştirme düşümü Nominatim / OSRM / MapLibre ile çalışır.
+Harita eklentisi şimdilik **OpenStreetMap** (MapLibre + OpenFreeMap Liberty) kullanır: küresel kapsama, Türkçe etiketler (`name:tr`), KKTC (Lefkoşa) varsayılan merkezi, kafe/market POI katmanları. Adres arama Nominatim, rota OSRM. Google Maps (`MAP_PROVIDER=google` + anahtar) sonra bağlanacak.
 
 ```text
 POST /api/v1/locations/route
 GET  /api/v1/locations/search
 GET  /api/v1/locations/reverse
-GET  /api/v1/locations/maps-config   # tarayıcı Maps JS anahtarı (GOOGLE_MAPS_BROWSER_KEY)
+GET  /api/v1/locations/maps-config   # OSM stil + varsayılan KKTC merkez (Google sonra)
 POST /api/v1/rides
 GET  /api/v1/rides/current
 POST /api/v1/rides/:rideId/match
@@ -96,7 +96,7 @@ POST  /api/v1/rides/:rideId/accept   # ilk kabul eden sürücü yolcuyu alır
 POST  /api/v1/rides/:rideId/reject
 ```
 
-`GOOGLE_MAPS_API_KEY` (sunucu, IP kısıtlı) ve `GOOGLE_MAPS_BROWSER_KEY` veya `VITE_GOOGLE_MAPS_API_KEY` (tarayıcı, HTTP referrer kısıtlı) Google Cloud'da Maps JavaScript API, Geocoding API ve Directions API açık olmalıdır. `MAP_FALLBACK=true` iken sağlayıcıya ulaşılamazsa yaklaşık rota/adres üretilir; production'da bu mod kapatılmalıdır.
+`MAP_PROVIDER=osm` (varsayılan) iken sunucu Nominatim + OSRM kullanır. Google'a geçmek için `MAP_PROVIDER=google` ve `VITE_MAP_PROVIDER=google` ile `GOOGLE_MAPS_API_KEY` / `GOOGLE_MAPS_BROWSER_KEY` verilir. `MAP_FALLBACK=true` iken sağlayıcıya ulaşılamazsa yaklaşık rota/adres üretilir; production'da bu mod kapatılmalıdır.
 
 ## Sürücü deneyimi (Faz 5)
 

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import argon2 from 'argon2';
 import pg from 'pg';
 import { z } from 'zod';
+import { DEFAULT_MAP_CENTER } from '@heytaksi/shared';
 import { env } from '../../config/env.js';
 
 /**
@@ -12,8 +13,8 @@ import { env } from '../../config/env.js';
 const input = z
   .object({
     DEMO_FLEET_PASSWORD: z.string().min(10).default('FleetDemo2026!'),
-    DEMO_FLEET_CENTER_LAT: z.coerce.number().default(36.8121),
-    DEMO_FLEET_CENTER_LON: z.coerce.number().default(34.6415),
+    DEMO_FLEET_CENTER_LAT: z.coerce.number().default(DEFAULT_MAP_CENTER.latitude),
+    DEMO_FLEET_CENTER_LON: z.coerce.number().default(DEFAULT_MAP_CENTER.longitude),
   })
   .parse(process.env);
 

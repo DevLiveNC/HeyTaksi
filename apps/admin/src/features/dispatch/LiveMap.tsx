@@ -1,9 +1,8 @@
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapInstance } from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LiveDriverMarker, LiveRideMarker } from '@heytaksi/shared';
-import { GoogleMapHost } from '@heytaksi/ui';
-import { mapStyleUrl } from '../../services/config';
+import { DEFAULT_MAP_CENTER, type LiveDriverMarker, type LiveRideMarker } from '@heytaksi/shared';
+import { bindOsmStyleFallback, enhanceOsmMap, GoogleMapHost, osmStyleUrl } from '@heytaksi/ui';
 
 interface Props {
   drivers: LiveDriverMarker[];
@@ -22,18 +21,8 @@ const availabilityColor: Record<string, string> = {
   offline: '#5c5c5c',
 };
 
-/** Mersin merkezi: canlı sürücü yokken haritanın açılış noktası. */
-const FALLBACK_CENTER: [number, number] = [34.6415, 36.8121];
-
-/**
- * Tile sağlayıcısına ulaşılamazsa kullanılan ağ bağımsız stil.
- * Operasyon ekibi altlık olmasa bile sürücü konumlarını görmeye devam eder.
- */
-const OFFLINE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#12130f' } }],
-};
+/** Lefkoşa, KKTC: canlı sürücü yokken haritanın açılış noktası. */
+const FALLBACK_CENTER: [number, number] = [DEFAULT_MAP_CENTER.longitude, DEFAULT_MAP_CENTER.latitude];
 
 /**
  * Operasyon canlı haritası.
@@ -108,7 +97,7 @@ export function MapLibreLiveMap({ drivers, rides, selectedRideId, selectedDriver
     if (!container.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: container.current,
-      style: mapStyleUrl,
+      style: osmStyleUrl('light'),
       center: FALLBACK_CENTER,
       zoom: 12,
       attributionControl: {},
@@ -116,15 +105,13 @@ export function MapLibreLiveMap({ drivers, rides, selectedRideId, selectedDriver
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current = map;
 
-    // Altlık yüklenemezse çevrimdışı stile geç; katmanlar yeniden kurulur.
-    let fallbackApplied = false;
-    map.on('error', (event) => {
-      const failedStyle = !map.isStyleLoaded() || (event.error as { status?: number } | undefined)?.status === 404;
-      if (fallbackApplied || !failedStyle) return;
-      fallbackApplied = true;
+    // Altlık yüklenemezse raster OSM'ye geç; katmanlar yeniden kurulur.
+    bindOsmStyleFallback(map, () => {
       loaded.current = false;
-      map.setStyle(OFFLINE_STYLE);
     });
+    const enhance = () => enhanceOsmMap(map);
+    map.on('load', enhance);
+    map.on('style.load', enhance);
 
     const addLayers = () => {
       map.addSource('rides', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -375,7 +362,7 @@ function GoogleLiveLayers({
   return null;
 }
 
-/** Operasyon canlı haritası: Google Maps eklentisi, anahtar yoksa MapLibre. */
+/** Operasyon canlı haritası: OSM/MapLibre; Google yalnızca VITE_MAP_PROVIDER=google iken. */
 export function LiveMap(props: Props) {
   const [engine, setEngine] = useState<{ map: google.maps.Map; maps: typeof google.maps } | null>(null);
   const onReady = useCallback((map: google.maps.Map, maps: typeof google.maps) => {

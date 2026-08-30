@@ -49,7 +49,7 @@ export function loadGoogleMaps(apiKey = googleMapsBrowserKey()): Promise<typeof 
     script.id = SCRIPT_ID;
     script.async = true;
     script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&language=tr&region=TR`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&language=tr`;
     script.onload = finish;
     script.onerror = () => {
       loading = null;

@@ -83,6 +83,24 @@ describe('deviceLocationUnchanged', () => {
   });
 });
 
+describe('sürücü/yolcu flaş senaryosu', () => {
+  it('her 5 sn TIMEOUT + prompt dalgalanmasında kapı ve hata görünmez', () => {
+    let permission = mergeGeoPermission('granted', 'prompt', true);
+    expect(permission).toBe('granted');
+    expect(locationPermissionBlocked(permission, true)).toBe(false);
+    expect(geoErrorMessage(permission, { code: 3 }, true)).toBeNull();
+
+    permission = mergeGeoPermission(permission, 'unknown', true);
+    expect(locationPermissionBlocked(permission, true)).toBe(false);
+    expect(geoErrorMessage(permission, { code: 2 }, true)).toBeNull();
+  });
+
+  it('hiç düzeltme yokken ilk zaman aşımı hâlâ görünür', () => {
+    expect(locationPermissionBlocked('prompt', false)).toBe(true);
+    expect(geoErrorMessage('prompt', { code: 3 }, false)).toMatch(/Konum alınamadı/);
+  });
+});
+
 describe('headingClose / transient error', () => {
   it('360 derecelik heading sarmalını hesaplar', () => {
     expect(headingClose(359, 2)).toBe(true);

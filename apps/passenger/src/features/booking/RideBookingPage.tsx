@@ -77,6 +77,7 @@ export function RideBookingPage() {
   const selected = vehicles.find((item) => item.type === booking.vehicleType)!;
   const fare = Math.max(90, base * selected.multiplier);
   const request = async () => {
+    if (loading || !booking.pickup || !booking.destination) return;
     setLoading(true);
     setError("");
     try {
@@ -164,7 +165,7 @@ export function RideBookingPage() {
         {error && <div className="booking-error">{error}</div>}
         <button
           className="request-primary"
-          disabled={loading}
+          disabled={loading || !booking.pickup || !booking.destination}
           onClick={() => void request()}
         >
           {loading ? <LoaderCircle /> : <CarFront />}

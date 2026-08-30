@@ -61,7 +61,7 @@ export function DashboardPage() {
                 void setAvailability("offline");
                 return;
               }
-              if (hasFix) {
+              if (hasFix || !blocked) {
                 void setAvailability("online");
                 return;
               }

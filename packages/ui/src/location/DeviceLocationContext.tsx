@@ -9,9 +9,14 @@ import {
   type PropsWithChildren,
 } from 'react';
 import {
+  GEO_FIRST_FIX_OPTIONS,
   GEO_WATCH_OPTIONS,
+  deviceLocationUnchanged,
   geolocationSupported,
+  geoErrorMessage,
+  isTransientGeoError,
   locationPermissionBlocked,
+  mergeGeoPermission,
   permissionFromPositionError,
   queryGeoPermission,
   readDeviceLocation,
@@ -52,20 +57,6 @@ function rememberPermission(state: GeoPermission) {
   }
 }
 
-function errorMessage(permission: GeoPermission, error: GeolocationPositionError | null): string | null {
-  if (permission === 'unsupported') {
-    return window.isSecureContext
-      ? 'Bu tarayıcı konum paylaşımını desteklemiyor.'
-      : 'Konum için güvenli bağlantı (HTTPS) gerekir.';
-  }
-  if (permission === 'denied') {
-    return 'Konum izni tarayıcıda kapalı. Adres çubuğundaki kilit simgesinden Konum’a izin ver, ardından tekrar dene.';
-  }
-  if (error && error.code === 3) return 'Konum alınamadı. Açık havada tekrar dene.';
-  if (error && error.code === 2) return 'Konum sinyali yok. Konum servislerini açıp tekrar dene.';
-  return null;
-}
-
 export function DeviceLocationProvider({ children }: PropsWithChildren) {
   const [permission, setPermissionState] = useState<GeoPermission>(readRememberedPermission);
   const setPermission = useCallback((next: GeoPermission | ((current: GeoPermission) => GeoPermission)) => {
@@ -81,6 +72,17 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   const [positionError, setPositionError] = useState<GeolocationPositionError | null>(null);
   const watchId = useRef<number | null>(null);
   const permissionStatus = useRef<PermissionStatus | null>(null);
+  const locationRef = useRef<DeviceLocation | null>(null);
+  const permissionRef = useRef(permission);
+  permissionRef.current = permission;
+  locationRef.current = location;
+
+  const applyIncomingPermission = useCallback(
+    (incoming: GeoPermission) => {
+      setPermission((current) => mergeGeoPermission(current, incoming, locationRef.current != null));
+    },
+    [setPermission],
+  );
 
   const stopWatch = useCallback(() => {
     if (watchId.current == null || !navigator.geolocation) return;
@@ -88,13 +90,43 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     watchId.current = null;
   }, []);
 
-  const applyPosition = useCallback((position: GeolocationPosition) => {
-    const next = readDeviceLocation(position);
-    setLocation(next);
-    setHeading(next.heading);
-    setPermission('granted');
-    setPositionError(null);
-  }, [setPermission]);
+  const applyPosition = useCallback(
+    (position: GeolocationPosition) => {
+      const next = readDeviceLocation(position);
+      const previous = locationRef.current;
+      if (previous && deviceLocationUnchanged(previous, next)) {
+        setPermission('granted');
+        setPositionError(null);
+        return;
+      }
+      locationRef.current = next;
+      setLocation(next);
+      setHeading(next.heading);
+      setPermission('granted');
+      setPositionError(null);
+    },
+    [setPermission],
+  );
+
+  const onWatchError = useCallback(
+    (error: GeolocationPositionError) => {
+      if (error.code === 1) {
+        setPositionError(error);
+        setPermission('denied');
+        locationRef.current = null;
+        setLocation(null);
+        setHeading(undefined);
+        stopWatch();
+        setLoading(false);
+        return;
+      }
+      setPermission((current) => permissionFromPositionError(error, current));
+      // TIMEOUT / UNAVAILABLE: son düzeltmeyi koru, hata bandını yakıp söndürme.
+      if (locationRef.current && isTransientGeoError(error)) return;
+      setPositionError(error);
+    },
+    [setPermission, stopWatch],
+  );
 
   const startWatch = useCallback(() => {
     if (!geolocationSupported()) {
@@ -102,21 +134,8 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       return;
     }
     if (watchId.current != null) return;
-    watchId.current = navigator.geolocation.watchPosition(
-      applyPosition,
-      (error) => {
-        setPositionError(error);
-        setPermission((current) => permissionFromPositionError(error, current));
-        if (error.code === 1) {
-          setLocation(null);
-          setHeading(undefined);
-          stopWatch();
-          setLoading(false);
-        }
-      },
-      GEO_WATCH_OPTIONS,
-    );
-  }, [applyPosition, stopWatch]);
+    watchId.current = navigator.geolocation.watchPosition(applyPosition, onWatchError, GEO_WATCH_OPTIONS);
+  }, [applyPosition, onWatchError, setPermission]);
 
   const request = useCallback(() => {
     if (!geolocationSupported()) {
@@ -125,8 +144,6 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     }
     setLoading(true);
     setPositionError(null);
-    // Jest kaybolmasın: await etmeden hemen watch/getCurrentPosition.
-    stopWatch();
     return new Promise<boolean>((resolve) => {
       let settled = false;
       const finish = (ok: boolean) => {
@@ -135,35 +152,42 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
         setLoading(false);
         resolve(ok);
       };
-      watchId.current = navigator.geolocation.watchPosition(
+      // Jest aynı tıkta senkron kalmalı; mevcut izlemeyi kesme (kapı/izin flicker).
+      navigator.geolocation.getCurrentPosition(
         (position) => {
           applyPosition(position);
           finish(true);
         },
         (error) => {
-          setPositionError(error);
-          setPermission((current) => permissionFromPositionError(error, current));
           if (error.code === 1) {
-            setLocation(null);
-            setHeading(undefined);
-            stopWatch();
+            onWatchError(error);
             finish(false);
             return;
           }
+          if (locationRef.current) {
+            finish(true);
+            return;
+          }
+          setPositionError(error);
+          setPermission((current) => permissionFromPositionError(error, current));
           finish(false);
         },
-        GEO_WATCH_OPTIONS,
+        GEO_FIRST_FIX_OPTIONS,
       );
+      if (watchId.current == null) {
+        watchId.current = navigator.geolocation.watchPosition(applyPosition, onWatchError, GEO_WATCH_OPTIONS);
+      }
       void queryGeoPermission().then((state) => {
         if (state === 'denied') {
           setPermission('denied');
+          locationRef.current = null;
           setLocation(null);
           stopWatch();
           finish(false);
         }
       });
     });
-  }, [applyPosition, stopWatch]);
+  }, [applyPosition, onWatchError, setPermission, stopWatch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,12 +195,10 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     const attach = async () => {
       const state = await queryGeoPermission();
       if (cancelled) return;
-      setPermission((current) => {
-        if (current === 'granted' && state !== 'denied' && state !== 'unsupported') return current;
-        return state;
-      });
+      applyIncomingPermission(state);
       if (state === 'granted') startWatch();
       if (state === 'denied' || state === 'unsupported') {
+        locationRef.current = null;
         setLocation(null);
         stopWatch();
       }
@@ -186,9 +208,10 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
         if (cancelled) return;
         permissionStatus.current = status;
         status.onchange = () => {
-          setPermission(status.state);
+          applyIncomingPermission(status.state);
           if (status.state === 'granted') startWatch();
           if (status.state === 'denied') {
+            locationRef.current = null;
             setLocation(null);
             setHeading(undefined);
             setLoading(false);
@@ -203,10 +226,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     const resume = () => {
       if (document.visibilityState !== 'visible') return;
       void queryGeoPermission().then((state) => {
-        setPermission((current) => {
-          if (current === 'granted' && state !== 'denied' && state !== 'unsupported') return current;
-          return state;
-        });
+        applyIncomingPermission(state);
         if (state === 'granted') startWatch();
       });
     };
@@ -219,20 +239,21 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       if (permissionStatus.current) permissionStatus.current.onchange = null;
       stopWatch();
     };
-  }, [startWatch, stopWatch]);
+  }, [applyIncomingPermission, startWatch, stopWatch]);
 
+  const hasFix = location != null;
   const value = useMemo<DeviceLocationValue>(
     () => ({
       permission,
       location,
       heading,
       loading,
-      error: errorMessage(permission, positionError),
-      hasFix: location != null,
-      blocked: locationPermissionBlocked(permission),
+      error: geoErrorMessage(permission, positionError, hasFix),
+      hasFix,
+      blocked: locationPermissionBlocked(permission, hasFix),
       request,
     }),
-    [permission, location, heading, loading, positionError, request],
+    [permission, location, heading, loading, positionError, hasFix, request],
   );
 
   return <DeviceLocationContext.Provider value={value}>{children}</DeviceLocationContext.Provider>;

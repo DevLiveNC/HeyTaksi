@@ -22,6 +22,7 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
   const mapRef = useRef<MapInstance | null>(null);
   const driverMarker = useRef<maplibregl.Marker | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
+  const fittedRide = useRef<string | null>(null);
 
   useEffect(() => {
     if (!container.current) return;
@@ -54,7 +55,7 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
     const update = () => driverMarker.current?.setLngLat([driverLocation.longitude, driverLocation.latitude]);
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
-  }, [driverLocation]);
+  }, [driverLocation.latitude, driverLocation.longitude]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -106,19 +107,27 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
         if (navigateTo !== "destination") add(ride.pickup, "pickup");
         add(ride.destination, "destination");
       }
+    };
+    if (map.isStyleLoaded()) render();
+    else map.once("load", render);
+  }, [hotspots, ride, navigateTo]);
 
-      const geometry =
-        ride?.geometry && navigateTo === "destination"
-          ? ride.geometry
-          : ride && navigateTo === "pickup" && !ride.geometry
-            ? {
-                type: "LineString" as const,
-                coordinates: [
-                  [driverLocation.longitude, driverLocation.latitude],
-                  [ride.pickup.longitude, ride.pickup.latitude],
-                ] as [number, number][],
-              }
-            : { type: "LineString" as const, coordinates: [] };
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const geometry =
+      ride?.geometry && navigateTo === "destination"
+        ? ride.geometry
+        : ride && navigateTo === "pickup" && !ride.geometry
+          ? {
+              type: "LineString" as const,
+              coordinates: [
+                [driverLocation.longitude, driverLocation.latitude],
+                [ride.pickup.longitude, ride.pickup.latitude],
+              ] as [number, number][],
+            }
+          : { type: "LineString" as const, coordinates: [] };
+    const apply = () => {
       const routeSource = map.getSource("route") as GeoJSONSource | undefined;
       if (routeSource) routeSource.setData({ type: "Feature", properties: {}, geometry });
       else if (map.isStyleLoaded() && geometry.coordinates.length) {
@@ -130,19 +139,24 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
           paint: { "line-color": "#ffcf20", "line-width": 5, "line-opacity": 0.9 },
         });
       }
-
       if (ride) {
-        const bounds = new maplibregl.LngLatBounds(
-          [ride.pickup.longitude, ride.pickup.latitude],
-          [ride.destination.longitude, ride.destination.latitude],
-        );
-        bounds.extend([driverLocation.longitude, driverLocation.latitude]);
-        map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
+        const key = `${ride.id}:${navigateTo ?? ""}`;
+        if (fittedRide.current !== key) {
+          fittedRide.current = key;
+          const bounds = new maplibregl.LngLatBounds(
+            [ride.pickup.longitude, ride.pickup.latitude],
+            [ride.destination.longitude, ride.destination.latitude],
+          );
+          bounds.extend([driverLocation.longitude, driverLocation.latitude]);
+          map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
+        }
+      } else {
+        fittedRide.current = null;
       }
     };
-    if (map.isStyleLoaded()) render();
-    else map.once("load", render);
-  }, [hotspots, ride, navigateTo, driverLocation]);
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [ride, navigateTo, driverLocation.latitude, driverLocation.longitude]);
 
   return <div ref={container} className={className} aria-label="Sürücü haritası" />;
 }
@@ -158,6 +172,8 @@ function GoogleDriverLayers({
   const markers = useRef<HtmlMapMarker[]>([]);
   const circles = useRef<google.maps.Circle[]>([]);
   const line = useRef<google.maps.Polyline | null>(null);
+  const fittedRide = useRef<string | null>(null);
+  const lastPan = useRef("");
 
   useEffect(() => {
     const { map, maps } = google;
@@ -169,7 +185,7 @@ function GoogleDriverLayers({
     } else {
       pin.current.setPosition({ lat: driverLocation.latitude, lng: driverLocation.longitude });
     }
-  }, [google, driverLocation]);
+  }, [google, driverLocation.latitude, driverLocation.longitude]);
 
   useEffect(() => {
     const { map, maps } = google;
@@ -201,7 +217,10 @@ function GoogleDriverLayers({
       if (navigateTo !== "destination") add(ride.pickup, "pickup");
       add(ride.destination, "destination");
     }
+  }, [google, hotspots, ride, navigateTo]);
 
+  useEffect(() => {
+    const { map, maps } = google;
     const path =
       ride?.geometry && navigateTo === "destination"
         ? ride.geometry.coordinates.map(([lng, lat]) => ({ lat, lng }))
@@ -225,15 +244,24 @@ function GoogleDriverLayers({
     }
 
     if (ride) {
-      const bounds = new maps.LatLngBounds();
-      bounds.extend({ lat: ride.pickup.latitude, lng: ride.pickup.longitude });
-      bounds.extend({ lat: ride.destination.latitude, lng: ride.destination.longitude });
-      bounds.extend({ lat: driverLocation.latitude, lng: driverLocation.longitude });
-      map.fitBounds(bounds, 70);
+      const key = `${ride.id}:${navigateTo ?? ""}`;
+      if (fittedRide.current !== key) {
+        fittedRide.current = key;
+        const bounds = new maps.LatLngBounds();
+        bounds.extend({ lat: ride.pickup.latitude, lng: ride.pickup.longitude });
+        bounds.extend({ lat: ride.destination.latitude, lng: ride.destination.longitude });
+        bounds.extend({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+        map.fitBounds(bounds, 70);
+      }
     } else {
-      map.panTo({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+      fittedRide.current = null;
+      const panKey = `${driverLocation.latitude.toFixed(3)},${driverLocation.longitude.toFixed(3)}`;
+      if (lastPan.current !== panKey) {
+        lastPan.current = panKey;
+        map.panTo({ lat: driverLocation.latitude, lng: driverLocation.longitude });
+      }
     }
-  }, [google, hotspots, ride, navigateTo, driverLocation]);
+  }, [google, ride, navigateTo, driverLocation.latitude, driverLocation.longitude]);
 
   return null;
 }

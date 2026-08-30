@@ -28,8 +28,9 @@ function PinIcon() {
 }
 
 export function LocationPermissionGate({ audience }: { audience: 'passenger' | 'driver' }) {
-  const { blocked, permission, loading, error, request } = useDeviceLocation();
-  if (!blocked) return null;
+  const { blocked, permission, loading, error, hasFix, request } = useDeviceLocation();
+  // Elde düzeltme varken overlay açılmaz; aksi halde tıklama (yolcu isteği) yutulur.
+  if (!blocked || hasFix) return null;
   const text = copy[audience];
   const denied = permission === 'denied';
   const unsupported = permission === 'unsupported';

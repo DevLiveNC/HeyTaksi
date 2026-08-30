@@ -1,54 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
 import type { Coordinate } from "@heytaksi/shared";
-const fallback: Coordinate = {
-  latitude: 36.8121,
-  longitude: 34.6415,
-  address: "Mersin merkez",
-};
+import { useDeviceLocation } from "@heytaksi/ui";
+
+/**
+ * Yolcu konumu. Tarayıcı izni {@link useDeviceLocation} ile paylaşılır;
+ * gerçek GPS gelene kadar sahte bir şehir merkezi döndürülmez.
+ */
 export function useCurrentLocation() {
-  const [location, setLocation] = useState<Coordinate | null>(null);
-  const [permission, setPermission] = useState<PermissionState | "unsupported">(
-    "prompt",
-  );
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    navigator.permissions
-      ?.query({ name: "geolocation" })
-      .then((result) => {
-        setPermission(result.state);
-        result.onchange = () => setPermission(result.state);
-      })
-      .catch(() => setPermission("prompt"));
-  }, []);
-  const request = useCallback(() => {
-    if (!navigator.geolocation) {
-      setPermission("unsupported");
-      setLocation(fallback);
-      return;
-    }
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          address: "Mevcut konum",
-        });
-        setLoading(false);
-      },
-      () => {
-        setPermission("denied");
-        setLocation(fallback);
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
-    );
-  }, []);
+  const geo = useDeviceLocation();
+  const location: Coordinate | null = geo.location
+    ? {
+        latitude: geo.location.latitude,
+        longitude: geo.location.longitude,
+        address: "Mevcut konum",
+      }
+    : null;
+
   return {
-    location: location ?? fallback,
-    isFallback: !location,
-    permission,
-    loading,
-    request,
+    location,
+    isFallback: !geo.hasFix,
+    permission: geo.permission,
+    loading: geo.loading,
+    request: geo.request,
+    blocked: geo.blocked,
   };
 }

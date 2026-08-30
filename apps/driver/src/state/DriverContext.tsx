@@ -39,6 +39,10 @@ interface DriverContextValue {
   location: { latitude: number; longitude: number };
   gpsOk: boolean;
   locationError: string | null;
+  hasFix: boolean;
+  blocked: boolean;
+  locating: boolean;
+  request(): Promise<boolean>;
   refreshDashboard(): Promise<void>;
   refreshRide(): Promise<void>;
   clearError(): void;
@@ -101,7 +105,15 @@ export function DriverProvider({ children }: PropsWithChildren) {
   }, [user, refreshDashboard, refreshRide]);
 
   const onDuty = Boolean(dashboard && dashboard.availability !== "offline");
-  const { location, gpsOk, locationError } = useDriverLocation(
+  const {
+    location,
+    gpsOk,
+    locationError,
+    hasFix,
+    blocked,
+    loading: locating,
+    request,
+  } = useDriverLocation(
     onDuty,
     socket,
     ride?.id ?? null,
@@ -347,6 +359,10 @@ export function DriverProvider({ children }: PropsWithChildren) {
       location,
       gpsOk,
       locationError,
+      hasFix,
+      blocked,
+      locating,
+      request,
       refreshDashboard,
       refreshRide,
       clearError: () => setError(null),
@@ -366,7 +382,7 @@ export function DriverProvider({ children }: PropsWithChildren) {
     }),
     [
       dashboard, ride, socket, offerExpiresAt, messages, connection, busy, error, offerArrivedAt,
-      location, gpsOk, locationError,
+      location, gpsOk, locationError, hasFix, blocked, locating, request,
       refreshDashboard, refreshRide, setAvailability, acceptOffer, rejectOffer,
       advance, startRide, cancelRide, sendMessage, markPassengerRated,
     ],

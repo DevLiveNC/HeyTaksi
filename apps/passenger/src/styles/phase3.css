@@ -144,6 +144,9 @@
 .location-kicker strong {
   font-size: 12px;
 }
+.location-kicker.needs-permission strong {
+  color: #a53c35;
+}
 .map-card {
   height: 274px;
   border-radius: 27px;

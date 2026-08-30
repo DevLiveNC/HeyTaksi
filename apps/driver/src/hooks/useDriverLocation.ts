@@ -1,20 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@heytaksi/ui";
+import { useEffect, useRef } from "react";
+import { DEFAULT_MAP_CENTER, useAuth, useDeviceLocation } from "@heytaksi/ui";
 import { DRIVER_LOCATION_INTERVAL_SECONDS } from "@heytaksi/shared";
 import { driverApi } from "../services/driverApi";
 import type { DriverSocket } from "../services/rideSocket";
-
-const fallback = { latitude: 36.8121, longitude: 34.6415 };
 
 export type DriverLocationFix = { latitude: number; longitude: number };
 
 /**
  * Sürücü konum takibi.
  *
- * Çevrim içiyken tarayıcı konumu izlenir ve {@link DRIVER_LOCATION_INTERVAL_SECONDS}
- * saniyede bir sunucuya gönderilir. GPS geç gelse veya reddedilse bile son bilinen
- * / yedek konum hemen yazılır; aksi halde sürücü dispatch defterine hiç girmez.
- * Birincil yol açık WebSocket'tir; soket kapalıysa REST yedeği kullanılır.
+ * GPS {@link useDeviceLocation} üzerinden gelir (izin tıklama jestinde istenir).
+ * Çevrim içiyken {@link DRIVER_LOCATION_INTERVAL_SECONDS} saniyede bir sunucuya
+ * gönderilir. Sahte şehir merkezi raporlanmaz; GPS yoksa yalnızca sunucudaki
+ * son bilinen konum (seed) kullanılır ki sürücü dispatch defterine girebilsin.
  */
 export function useDriverLocation(
   enabled: boolean,
@@ -22,36 +20,24 @@ export function useDriverLocation(
   rideId?: string | null,
   seed?: DriverLocationFix | null,
 ) {
+  const geo = useDeviceLocation();
   const { authorizedFetch } = useAuth();
-  const [location, setLocation] = useState<DriverLocationFix>(seed ?? fallback);
-  const [heading, setHeading] = useState<number | undefined>();
-  const [gpsOk, setGpsOk] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
   const lastSent = useRef(0);
-  const locationRef = useRef(location);
-  locationRef.current = location;
   const fetcher = useRef(authorizedFetch);
   fetcher.current = authorizedFetch;
   const socketRef = useRef(socket);
   socketRef.current = socket;
   const rideRef = useRef(rideId);
   rideRef.current = rideId;
-  const headingRef = useRef(heading);
-  headingRef.current = heading;
+  const gpsRef = useRef(geo.location);
+  gpsRef.current = geo.location;
+  const seedRef = useRef(seed ?? null);
+  seedRef.current = seed ?? null;
+  const headingRef = useRef(geo.heading);
+  headingRef.current = geo.heading;
 
   useEffect(() => {
-    if (seed && !gpsOk) {
-      setLocation((current) =>
-        current.latitude === seed.latitude && current.longitude === seed.longitude ? current : seed,
-      );
-    }
-  }, [seed?.latitude, seed?.longitude, gpsOk]);
-
-  useEffect(() => {
-    if (!enabled) {
-      setGpsOk(false);
-      return;
-    }
+    if (!enabled) return;
 
     const lastPinged = { current: null as DriverLocationFix | null };
     const movedEnough = (next: DriverLocationFix) => {
@@ -59,7 +45,10 @@ export function useDriverLocation(
       if (!previous) return true;
       return Math.abs(previous.latitude - next.latitude) > 0.0004 || Math.abs(previous.longitude - next.longitude) > 0.0004;
     };
-    const ping = (next: DriverLocationFix, extras?: { heading?: number; speedMps?: number; accuracyMeters?: number }) => {
+    const ping = (
+      next: DriverLocationFix,
+      extras?: { heading?: number; speedMps?: number; accuracyMeters?: number },
+    ) => {
       const now = Date.now();
       if (!movedEnough(next) && now - lastSent.current < DRIVER_LOCATION_INTERVAL_SECONDS * 1000) return;
       lastSent.current = now;
@@ -78,47 +67,51 @@ export function useDriverLocation(
         void driverApi.reportLocation(fetcher.current, payload).catch(() => undefined);
     };
 
+    const source = () => gpsRef.current ?? seedRef.current;
     lastSent.current = 0;
-    ping(locationRef.current);
-
-    const interval = window.setInterval(() => ping(locationRef.current), DRIVER_LOCATION_INTERVAL_SECONDS * 1000);
-
-    if (!navigator.geolocation) {
-      setLocationError("Bu tarayıcı konum paylaşmıyor; teklifler yedek konuma göre gider.");
-      return () => window.clearInterval(interval);
+    const first = source();
+    if (first) {
+      ping(
+        { latitude: first.latitude, longitude: first.longitude },
+        gpsRef.current
+          ? {
+              ...(gpsRef.current.heading != null ? { heading: gpsRef.current.heading } : {}),
+              ...(gpsRef.current.speedMps != null ? { speedMps: gpsRef.current.speedMps } : {}),
+              ...(gpsRef.current.accuracyMeters != null ? { accuracyMeters: gpsRef.current.accuracyMeters } : {}),
+            }
+          : undefined,
+      );
     }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const next = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-        setLocation(next);
-        setHeading(position.coords.heading ?? undefined);
-        setGpsOk(true);
-        setLocationError(null);
-        ping(next, {
-          ...(position.coords.heading != null ? { heading: position.coords.heading } : {}),
-          ...(position.coords.speed != null ? { speedMps: Math.max(0, position.coords.speed) } : {}),
-          accuracyMeters: position.coords.accuracy,
-        });
-      },
-      (error) => {
-        setGpsOk(false);
-        setLocationError(
-          error.code === error.PERMISSION_DENIED
-            ? "Konum izni kapalı. Yakındaki çağrıları almak için tarayıcı konumuna izin ver."
-            : "Konum alınamadı. Teklifler son bilinen veya yedek konuma göre gider.",
-        );
-      },
-      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
-    );
-    return () => {
-      window.clearInterval(interval);
-      navigator.geolocation.clearWatch(watchId);
-    };
+    const interval = window.setInterval(() => {
+      const next = source();
+      if (!next) return;
+      ping(
+        { latitude: next.latitude, longitude: next.longitude },
+        gpsRef.current
+          ? {
+              ...(gpsRef.current.heading != null ? { heading: gpsRef.current.heading } : {}),
+              ...(gpsRef.current.speedMps != null ? { speedMps: gpsRef.current.speedMps } : {}),
+              ...(gpsRef.current.accuracyMeters != null ? { accuracyMeters: gpsRef.current.accuracyMeters } : {}),
+            }
+          : undefined,
+      );
+    }, DRIVER_LOCATION_INTERVAL_SECONDS * 1000);
+
+    return () => window.clearInterval(interval);
   }, [enabled]);
 
-  return { location, heading, gpsOk, locationError };
+  const location = geo.location ?? seed ?? DEFAULT_MAP_CENTER;
+
+  return {
+    location,
+    heading: geo.heading,
+    gpsOk: geo.hasFix,
+    locationError: geo.error,
+    permission: geo.permission,
+    hasFix: geo.hasFix,
+    blocked: geo.blocked,
+    loading: geo.loading,
+    request: geo.request,
+  };
 }

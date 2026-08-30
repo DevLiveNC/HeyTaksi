@@ -1,5 +1,5 @@
 import { BadgeCheck, CarFront, CirclePercent, Star, LogOut, ShieldCheck } from "lucide-react";
-import { useAuth } from "@heytaksi/ui";
+import { useAuth, useDeviceLocation } from "@heytaksi/ui";
 import { useDriver } from "../../state/DriverContext";
 
 const availabilityLabels: Record<string, string> = {
@@ -14,6 +14,7 @@ const availabilityLabels: Record<string, string> = {
 export function AccountPage() {
   const { user, logout } = useAuth();
   const { dashboard, connection } = useDriver();
+  const geo = useDeviceLocation();
   return (
     <div className="account-page">
       <section className="profile-card">
@@ -67,6 +68,10 @@ export function AccountPage() {
         <div>
           <span>Realtime bağlantı</span>
           <strong>{connection === "live" ? "Canlı" : connection === "connecting" ? "Bağlanıyor" : "Kesik"}</strong>
+        </div>
+        <div>
+          <span>Konum izni</span>
+          <strong>{geo.permission === "granted" ? "Açık" : geo.permission === "denied" ? "Kapalı" : geo.permission === "unsupported" ? "Desteklenmiyor" : "Bekleniyor"}</strong>
         </div>
         <div>
           <span>Toplam yolculuk</span>

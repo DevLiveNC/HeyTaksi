@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, type PropsWithChildren } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from "@heytaksi/ui";
+import { AuthGate, AuthPage, DeviceLocationProvider, LocationPermissionGate, MapsKeyProvider, useAuth } from "@heytaksi/ui";
 import { PassengerLayout } from "../components/PassengerLayout";
 import { HomePage } from "../features/home/HomePage";
 
@@ -21,8 +21,10 @@ const ActiveRidePage = lazy(() => import("../features/booking/ActiveRidePage").t
 
 function PassengerApp() {
   return (
+    <DeviceLocationProvider>
     <PassengerExperienceProvider>
       <BookingProvider>
+        <LocationPermissionGate audience="passenger" />
         <Suspense fallback={<div className="ride-loading"><span>HT</span><h1>Harita hazırlanıyor</h1></div>}>
         <Routes>
           <Route element={<PassengerLayout />}>
@@ -44,6 +46,7 @@ function PassengerApp() {
         </Suspense>
       </BookingProvider>
     </PassengerExperienceProvider>
+    </DeviceLocationProvider>
   );
 }
 function MapsBridge({ children }: PropsWithChildren) {

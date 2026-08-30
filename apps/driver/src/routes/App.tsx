@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useCallback, type PropsWithChildren } from "react";
-import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from "@heytaksi/ui";
+import { AuthGate, AuthPage, DeviceLocationProvider, LocationPermissionGate, MapsKeyProvider, useAuth } from "@heytaksi/ui";
 import { DriverLayout } from "../components/DriverLayout";
 import { DriverProvider, useDriver } from "../state/DriverContext";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
@@ -18,18 +18,21 @@ function RideOfferHost() {
 
 function DriverApp() {
   return (
-    <DriverProvider>
-      <RideOfferHost />
-      <Routes>
-        <Route element={<DriverLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/earnings" element={<EarningsPage />} />
-          <Route path="/account" element={<AccountPage />} />
-        </Route>
-        <Route path="/ride" element={<ActiveRidePage />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </DriverProvider>
+    <DeviceLocationProvider>
+      <DriverProvider>
+        <LocationPermissionGate audience="driver" />
+        <RideOfferHost />
+        <Routes>
+          <Route element={<DriverLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/earnings" element={<EarningsPage />} />
+            <Route path="/account" element={<AccountPage />} />
+          </Route>
+          <Route path="/ride" element={<ActiveRidePage />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </DriverProvider>
+    </DeviceLocationProvider>
   );
 }
 

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "@heytaksi/ui";
+import { useAuth, LocationPermissionToggle } from "@heytaksi/ui";
 import { usePassengerExperience } from "../../state/PassengerExperience";
 import { passengerApi } from "../../services/passengerApi";
 import { ProfileEditForm } from "./ProfilePage";
@@ -174,7 +174,7 @@ export function ProfileSettingsPage() {
       )}
       {section === "privacy" && (
         <section className="settings-card">
-          <Toggle storageKey="heytaksi.privacy.location" label="Konum izni" caption="Yalnızca uygulamayı kullanırken" />
+          <LocationPermissionToggle label="Konum izni" caption="Yalnızca uygulamayı kullanırken" />
           <Toggle storageKey="heytaksi.privacy.analytics" label="Analitik paylaşımı" caption="Deneyimi iyileştirmemize yardımcı ol" initial={false} />
         </section>
       )}

@@ -18,3 +18,14 @@ export {
 } from './maps/loader';
 export { createHtmlMarker, type HtmlMapMarker } from './maps/html-marker';
 export { GOOGLE_MAP_DARK_STYLES, GOOGLE_MAP_LIGHT_STYLES } from './maps/styles';
+export {
+  DEFAULT_MAP_CENTER,
+  geolocationSupported,
+  locationPermissionBlocked,
+  queryGeoPermission,
+  type DeviceLocation,
+  type GeoPermission,
+} from './location/geolocation';
+export { DeviceLocationProvider, useDeviceLocation } from './location/DeviceLocationContext';
+export { LocationPermissionGate } from './location/LocationPermissionGate';
+export { LocationPermissionToggle } from './location/LocationPermissionToggle';

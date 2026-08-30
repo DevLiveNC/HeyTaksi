@@ -16,7 +16,20 @@ import { DriverMap } from "./DriverMap";
 const demandLabels = { high: "Yoğun", medium: "Artan", low: "Sakin" } as const;
 
 export function DashboardPage() {
-  const { dashboard, ride, error, setAvailability, busy, location, gpsOk, locationError } = useDriver();
+  const {
+    dashboard,
+    ride,
+    error,
+    setAvailability,
+    busy,
+    location,
+    gpsOk,
+    locationError,
+    hasFix,
+    request,
+    blocked,
+    locating,
+  } = useDriver();
   const availability = dashboard?.availability ?? "offline";
   const onDuty = availability !== "offline";
   const offerPending = Boolean(ride?.offerId);
@@ -43,7 +56,19 @@ export function DashboardPage() {
             aria-checked={onDuty}
             aria-label={onDuty ? "Çevrim dışı ol" : "Çevrim içi ol"}
             disabled={busy || availability === "on_trip" || (onDuty && dashboard.verificationStatus !== "verified")}
-            onClick={() => void setAvailability(onDuty ? "offline" : "online")}
+            onClick={() => {
+              if (onDuty) {
+                void setAvailability("offline");
+                return;
+              }
+              if (hasFix) {
+                void setAvailability("online");
+                return;
+              }
+              void request().then((allowed) => {
+                if (allowed) void setAvailability("online");
+              });
+            }}
           >
             <span className="duty-knob">
               <Power size={16} />
@@ -68,7 +93,11 @@ export function DashboardPage() {
         ) : (
           <p className="duty-hint">
             {dashboard.verificationStatus === "verified"
-              ? "Anahtarı açtığında yakındaki yolculuk talepleri sana gelmeye başlar."
+              ? locating
+                ? "Konum izni isteniyor…"
+                : blocked
+                  ? "Çevrim içi olmak için önce konum izni vermen gerekir."
+                  : "Anahtarı açtığında yakındaki yolculuk talepleri sana gelmeye başlar."
               : "Çevrim içi olmak için sürücü doğrulamanın tamamlanması gerekir."}
           </p>
         )}

@@ -1,4 +1,4 @@
-import { driverAvailabilityTargetSchema } from '@heytaksi/shared';
+import { driverAvailabilityTargetSchema, locationPingSchema } from '@heytaksi/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsync } from 'fastify';
 import { validate } from '../../core/http/validation.js';
@@ -13,13 +13,6 @@ const vehicleSchema = z.object({
   vehicleType: z.enum(['standard', 'comfort', 'xl', 'accessible']),
 });
 const availabilitySchema = z.object({ availability: driverAvailabilityTargetSchema });
-const locationSchema = z.object({
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
-  heading: z.number().min(0).max(360).optional(),
-  accuracyMeters: z.number().min(0).max(1000).optional(),
-  speedMps: z.number().min(0).max(90).optional(),
-});
 const documentSchema = z.object({
   documentType: z.enum(['driver_license', 'identity', 'criminal_record', 'vehicle_registration', 'insurance']),
   documentUrl: z.url(), expiryDate: z.iso.date().nullable().optional(),
@@ -57,7 +50,7 @@ export const driverRoutes: FastifyPluginAsync = async (app) => {
     };
   });
   app.post('/me/location', { preHandler: driverGuard }, async (request, reply) => {
-    const input = validate(locationSchema, request.body);
+    const input = validate(locationPingSchema, request.body);
     return reply.status(201).send({ success: true, data: await drivers.updateLocation(request.user.id, input) });
   });
   app.get('/me/hotspots', { preHandler: driverGuard }, async () => ({

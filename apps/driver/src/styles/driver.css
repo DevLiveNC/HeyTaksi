@@ -243,6 +243,17 @@ body {
   margin: 12px 0 0;
   line-height: 1.6;
 }
+.duty-location-warn {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #3a2a12;
+  border: 1px solid #6b5410;
+  color: #f3d27a;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
 .active-ride-banner {
   display: flex;
   align-items: center;

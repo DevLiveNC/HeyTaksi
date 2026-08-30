@@ -2,16 +2,24 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useCallback, type PropsWithChildren } from "react";
 import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from "@heytaksi/ui";
 import { DriverLayout } from "../components/DriverLayout";
-import { DriverProvider } from "../state/DriverContext";
+import { DriverProvider, useDriver } from "../state/DriverContext";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { EarningsPage } from "../features/earnings/EarningsPage";
 import { AccountPage } from "../features/account/AccountPage";
 import { ActiveRidePage } from "../features/ride/ActiveRidePage";
+import { RideOfferSheet } from "../features/offer/RideOfferSheet";
 import { driverApi } from "../services/driverApi";
+
+function RideOfferHost() {
+  const { ride } = useDriver();
+  if (!ride?.offerId) return null;
+  return <RideOfferSheet />;
+}
 
 function DriverApp() {
   return (
     <DriverProvider>
+      <RideOfferHost />
       <Routes>
         <Route element={<DriverLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />

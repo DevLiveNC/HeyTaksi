@@ -210,6 +210,13 @@ try {
          ON CONFLICT(plate) DO UPDATE SET driver_id=EXCLUDED.driver_id, status='active', updated_at=NOW()`,
         [driverId, demoPlate],
       );
+      await client.query(
+        `INSERT INTO driver_locations(driver_id, latitude, longitude, heading, availability, recorded_at)
+         VALUES($1, 36.8121, 34.6415, 90, 'offline', NOW())
+         ON CONFLICT (driver_id) DO UPDATE SET
+           latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, recorded_at = NOW()`,
+        [driverId],
+      );
     }
 
     if (['admin', 'dispatcher', 'support'].includes(acc.role)) {

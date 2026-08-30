@@ -5,6 +5,7 @@ import {
   driverAvailabilityTargetsFor,
   driverCancelReasons,
   isDriverDispatchable,
+  locationPingSchema,
   passengerCancelReasons,
 } from '@heytaksi/shared';
 
@@ -36,6 +37,13 @@ describe('driver availability contracts', () => {
     expect(isDriverDispatchable('paused')).toBe(false);
     expect(isDriverDispatchable('on_trip')).toBe(false);
     expect(isDriverDispatchable('offline')).toBe(false);
+  });
+
+  it('accepts desktop-grade GPS accuracy on location pings', () => {
+    expect(
+      locationPingSchema.safeParse({ latitude: 36.8121, longitude: 34.6415, accuracyMeters: 2500 }).success,
+    ).toBe(true);
+    expect(locationPingSchema.safeParse({ latitude: 36.8121, longitude: 34.6415 }).success).toBe(true);
   });
 });
 

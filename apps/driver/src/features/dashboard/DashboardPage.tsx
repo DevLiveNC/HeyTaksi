@@ -11,18 +11,14 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDriver } from "../../state/DriverContext";
-import { useDriverLocation } from "../../hooks/useDriverLocation";
 import { DriverMap } from "./DriverMap";
-import { RideOfferSheet } from "../offer/RideOfferSheet";
 
 const demandLabels = { high: "Yoğun", medium: "Artan", low: "Sakin" } as const;
 
 export function DashboardPage() {
-  const { dashboard, ride, error, setAvailability, busy, socket } = useDriver();
+  const { dashboard, ride, error, setAvailability, busy, location, gpsOk, locationError } = useDriver();
   const availability = dashboard?.availability ?? "offline";
   const onDuty = availability !== "offline";
-  // Konum sinyali açık soket üzerinden gider; soket kapalıysa REST'e düşer.
-  const { location } = useDriverLocation(onDuty, socket, ride?.id ?? null);
   const offerPending = Boolean(ride?.offerId);
 
   if (!dashboard)
@@ -76,6 +72,7 @@ export function DashboardPage() {
               : "Çevrim içi olmak için sürücü doğrulamanın tamamlanması gerekir."}
           </p>
         )}
+        {onDuty && locationError && !gpsOk && <p className="duty-location-warn">{locationError}</p>}
       </section>
 
       {ride && !offerPending && (
@@ -141,7 +138,6 @@ export function DashboardPage() {
       </section>
 
       {error && <div className="driver-error">{error}</div>}
-      {offerPending && <RideOfferSheet />}
     </div>
   );
 }

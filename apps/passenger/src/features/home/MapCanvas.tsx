@@ -1,5 +1,6 @@
 import { LocateFixed, Navigation } from "lucide-react";
 import { useEffect } from "react";
+import { coordinatesClose } from "@heytaksi/ui";
 import { InteractiveMap } from "../booking/InteractiveMap";
 import { useBooking } from "../booking/BookingContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
@@ -10,10 +11,18 @@ export function MapCanvas() {
   const geo = useCurrentLocation();
   // Faz 6: haritadaki taksiler artık Redis konum defterinden gelen canlı sürücülerdir.
   const { drivers, closestEtaSeconds, loading } = useNearbyDrivers(geo.location);
+  const pickup = booking.pickup;
 
   useEffect(() => {
-    if (geo.location) booking.setPickup(geo.location);
-  }, [geo.location, geo.isFallback]);
+    if (!geo.location) return;
+    if (!pickup) {
+      booking.setPickup(geo.location);
+      return;
+    }
+    if (pickup.address === "Mevcut konum" && !coordinatesClose(pickup, geo.location, 0.0004)) {
+      booking.setPickup(geo.location);
+    }
+  }, [geo.location, pickup, booking]);
 
   return (
     <section className="map-card real" aria-label="Canlı konum haritası">

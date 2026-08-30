@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@heytaksi/ui";
+import { coordinatesClose, useAuth } from "@heytaksi/ui";
 import type { Coordinate } from "@heytaksi/shared";
 import { InteractiveMap } from "../booking/InteractiveMap";
 import { useBooking } from "../booking/BookingContext";
@@ -30,8 +30,18 @@ export function DestinationSearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (geo.location) booking.setPickup(geo.location);
-  }, [geo.location, geo.isFallback]);
+    if (!geo.location) return;
+    const current = booking.pickup;
+    // Kullanıcının seçtiği alış noktasını GPS titremesiyle ezme; yalnızca boşsa veya
+    // hâlâ "canlı konum" ise ve anlamlı yer değiştiyse güncelle.
+    if (!current) {
+      booking.setPickup(geo.location);
+      return;
+    }
+    if (current.address === "Mevcut konum" && !coordinatesClose(current, geo.location, 0.0004)) {
+      booking.setPickup(geo.location);
+    }
+  }, [geo.location?.latitude, geo.location?.longitude]);
   useEffect(() => {
     if (query.trim().length < 2) {
       setResults([]);
@@ -212,7 +222,7 @@ export function DestinationSearchPage() {
         </div>
         <button
           className="request-primary"
-          disabled={!booking.destination || loading}
+          disabled={!booking.pickup || !booking.destination || loading}
           onClick={() => void continueRoute()}
         >
           {loading ? <LoaderCircle /> : <Search />}Rotayı ve seçenekleri gör

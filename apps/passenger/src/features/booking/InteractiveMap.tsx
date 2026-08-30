@@ -5,6 +5,16 @@ import { createHtmlMarker, GoogleMapHost } from "@heytaksi/ui";
 import type { HtmlMapMarker } from "@heytaksi/ui";
 import type { Coordinate, RouteEstimate } from "@heytaksi/shared";
 
+function cameraKey(
+  pickup?: Coordinate | null,
+  destination?: Coordinate | null,
+  route?: RouteEstimate | null,
+): string {
+  const point = (value?: Coordinate | null) =>
+    value ? `${value.latitude.toFixed(3)},${value.longitude.toFixed(3)}` : "";
+  return `${point(pickup)}|${point(destination)}|${route?.distanceMeters ?? ""}`;
+}
+
 interface Props {
   pickup?: Coordinate | null;
   destination?: Coordinate | null;
@@ -84,6 +94,7 @@ function MapLibreInteractiveMap({
       }
   }, [nearbyDrivers]);
 
+  const lastCamera = useRef("");
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -103,13 +114,19 @@ function MapLibreInteractiveMap({
     if (pickup) add(pickup, "pickup");
     if (destination) add(destination, "destination");
     if (driverLocation) add({ ...driverLocation, address: "Sürücü konumu" }, "driver");
-    if (pickup && destination) {
-      const bounds = new maplibregl.LngLatBounds(
-        [pickup.longitude, pickup.latitude],
-        [pickup.longitude, pickup.latitude],
-      );
-      bounds.extend([destination.longitude, destination.latitude]);
-      map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
+    const nextCamera = cameraKey(pickup, destination, route);
+    if (nextCamera !== lastCamera.current) {
+      lastCamera.current = nextCamera;
+      if (pickup && destination) {
+        const bounds = new maplibregl.LngLatBounds(
+          [pickup.longitude, pickup.latitude],
+          [pickup.longitude, pickup.latitude],
+        );
+        bounds.extend([destination.longitude, destination.latitude]);
+        map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
+      } else if (pickup) {
+        map.easeTo({ center: [pickup.longitude, pickup.latitude], duration: 400 });
+      }
     }
     const update = () => {
       const data = route?.geometry ?? { type: "LineString" as const, coordinates: [] };
@@ -156,6 +173,7 @@ function GoogleInteractiveMap({
   const pointMarkers = useRef<HtmlMapMarker[]>([]);
   const nearby = useRef<Map<string, HtmlMapMarker>>(new Map());
   const line = useRef<google.maps.Polyline | null>(null);
+  const lastCamera = useRef("");
 
   useEffect(() => {
     const { map, maps } = google;
@@ -205,14 +223,17 @@ function GoogleInteractiveMap({
       line.current.setMap(map);
     }
 
-    if (pickup && destination) {
-      const bounds = new maps.LatLngBounds();
-      bounds.extend({ lat: pickup.latitude, lng: pickup.longitude });
-      bounds.extend({ lat: destination.latitude, lng: destination.longitude });
-      if (driverLocation) bounds.extend({ lat: driverLocation.latitude, lng: driverLocation.longitude });
-      map.fitBounds(bounds, 70);
-    } else if (pickup) {
-      map.panTo({ lat: pickup.latitude, lng: pickup.longitude });
+    const nextCamera = cameraKey(pickup, destination, route);
+    if (nextCamera !== lastCamera.current) {
+      lastCamera.current = nextCamera;
+      if (pickup && destination) {
+        const bounds = new maps.LatLngBounds();
+        bounds.extend({ lat: pickup.latitude, lng: pickup.longitude });
+        bounds.extend({ lat: destination.latitude, lng: destination.longitude });
+        map.fitBounds(bounds, 70);
+      } else if (pickup) {
+        map.panTo({ lat: pickup.latitude, lng: pickup.longitude });
+      }
     }
     return () => {
       for (const marker of pointMarkers.current) marker.setMap(null);

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Coordinate } from "@heytaksi/shared";
 import { useDeviceLocation } from "@heytaksi/ui";
 
@@ -7,13 +8,17 @@ import { useDeviceLocation } from "@heytaksi/ui";
  */
 export function useCurrentLocation() {
   const geo = useDeviceLocation();
-  const location: Coordinate | null = geo.location
-    ? {
-        latitude: geo.location.latitude,
-        longitude: geo.location.longitude,
-        address: "Mevcut konum",
-      }
-    : null;
+  const location: Coordinate | null = useMemo(
+    () =>
+      geo.location
+        ? {
+            latitude: geo.location.latitude,
+            longitude: geo.location.longitude,
+            address: "Mevcut konum",
+          }
+        : null,
+    [geo.location],
+  );
 
   return {
     location,

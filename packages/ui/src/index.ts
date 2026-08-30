@@ -20,6 +20,7 @@ export { createHtmlMarker, type HtmlMapMarker } from './maps/html-marker';
 export { GOOGLE_MAP_DARK_STYLES, GOOGLE_MAP_LIGHT_STYLES } from './maps/styles';
 export {
   DEFAULT_MAP_CENTER,
+  coordinatesClose,
   geolocationSupported,
   locationPermissionBlocked,
   queryGeoPermission,

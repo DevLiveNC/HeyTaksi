@@ -1,5 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+
+process.env.VITE_MAP_PROVIDER ??= 'osm';
+process.env.VITE_MAP_STYLE_URL ??= 'https://tiles.openfreemap.org/styles/liberty';
+
 export default defineConfig({
   plugins: [react()],
   server: {

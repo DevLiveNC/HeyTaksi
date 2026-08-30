@@ -20,7 +20,9 @@ Frontend SPA rewrite `/api` yollarını **hariç tutar**; aksi halde `POST /api/
 - `VITE_MAP_PROVIDER=osm` (şimdilik OpenStreetMap; Google için `google`)
 - `VITE_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty` (Türkçe etiket + POI)
 - `VITE_GOOGLE_MAPS_API_KEY=` (Maps JavaScript API; yalnızca `VITE_MAP_PROVIDER=google` iken)
-- API Project: `GOOGLE_MAPS_API_KEY` (Directions/Geocoding), isteğe bağlı `GOOGLE_MAPS_BROWSER_KEY`
+- API Project: `MAP_PROVIDER=osm`, `GEOCODING_URL=https://nominatim.openstreetmap.org`, `ROUTING_URL=https://router.project-osrm.org`. Google’a geçince `MAP_PROVIDER=google` + `GOOGLE_MAPS_API_KEY` / `GOOGLE_MAPS_BROWSER_KEY`
+
+Bu OSM değerleri ayrıca her frontend `vercel.json` / `.env.production` ve API `vercel.json` `env` alanına yazılmıştır; bir sonraki deploy’da build’e girer. Dashboard’da `VITE_MAP_PROVIDER=google` varsa onu `osm` yapın, aksi halde panel değeri kazanır.
 
 API Project'ine Neon `DATABASE_URL` (veya Vercel Postgres `POSTGRES_URL`) ile `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` eklenmelidir. `CORS_ORIGINS` içine frontend origin'lerini yazabilirsiniz; Hey Taksi `*.vercel.app` hostları ayrıca otomatik kabul edilir.
 

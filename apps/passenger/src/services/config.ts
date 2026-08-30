@@ -1,9 +1,7 @@
-// Frontend API/WS adresi ortam değişkeninden alınır; yoksa aynı origin (Vite proxy) kullanılır.
-export const apiBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "/api/v1";
+import { resolveApiBaseUrl, resolveWsBaseUrl } from "@heytaksi/shared";
 
-export const wsBaseUrl = (() => {
-  const configured = import.meta.env.VITE_WS_URL as string | undefined;
-  if (configured) return configured;
-  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${window.location.host}/ws`;
-})();
+// Frontend API/WS adresi ortam değişkeninden alınır; frontend hostuna işaret
+// ederse aynı origin (Vite / Vercel /api proxy) kullanılır.
+export const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
+
+export const wsBaseUrl = resolveWsBaseUrl(import.meta.env.VITE_WS_URL as string | undefined, window.location);

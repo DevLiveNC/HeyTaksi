@@ -1,12 +1,10 @@
-// Yönetim paneli API/WS adresi ortam değişkeninden alınır; yoksa aynı origin (Vite proxy) kullanılır.
-export const apiBaseUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '/api/v1';
+import { resolveApiBaseUrl, resolveWsBaseUrl } from '@heytaksi/shared';
 
-export const wsBaseUrl = (() => {
-  const configured = import.meta.env.VITE_WS_URL as string | undefined;
-  if (configured) return configured;
-  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${scheme}://${window.location.host}/ws`;
-})();
+// Yönetim paneli API/WS adresi ortam değişkeninden alınır; frontend hostuna
+// (ör. hey-taksi.vercel.app) işaret ederse aynı origin /api proxy'si kullanılır.
+export const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
+
+export const wsBaseUrl = resolveWsBaseUrl(import.meta.env.VITE_WS_URL as string | undefined, window.location);
 
 export const mapStyleUrl =
   (import.meta.env.VITE_MAP_STYLE_URL as string | undefined) ?? 'https://tiles.openfreemap.org/styles/dark';

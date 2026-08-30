@@ -114,24 +114,30 @@ export class DriverLocationStore {
     await this.app.db.query(`UPDATE driver_locations SET availability='offline' WHERE driver_id=$1`, [driverId]);
   }
 
-  /** Yalnızca durum değişti; konum korunur. */
+  /**
+   * Yalnızca durum değişti; son bilinen konum korunur ve Redis GEO'ya yeniden yazılır.
+   * Redis'te kayıt yoksa PostgreSQL'deki son konum (TTL dolmuş olsa bile) geri yüklenir;
+   * aksi halde çevrim içi sürücü dispatch'e görünmez.
+   */
   async setAvailability(driverId: string, availability: DriverAvailability, rideId: string | null = null): Promise<void> {
     if (availability === 'offline') {
       await this.remove(driverId);
       return;
     }
-    if (this.usable) {
-      try {
-        const raw = await this.redis.hget(HASH_KEY, driverId);
-        if (raw) {
-          const state = JSON.parse(raw) as StoredState;
-          state.availability = availability;
-          state.rideId = rideId;
-          await this.redis.hset(HASH_KEY, driverId, JSON.stringify(state));
-        }
-      } catch (error) {
-        this.app.log.warn({ err: error }, 'Sürücü durumu Redis’te güncellenemedi.');
-      }
+    const known = (await this.get(driverId)) ?? (await this.lastKnownFromDatabase(driverId));
+    if (known) {
+      await this.upsert({
+        driverId,
+        latitude: known.latitude,
+        longitude: known.longitude,
+        heading: known.heading,
+        speedMps: known.speedMps,
+        accuracyMeters: known.accuracyMeters,
+        availability,
+        vehicleType: known.vehicleType,
+        rideId,
+      });
+      return;
     }
     await this.app.db.query(
       `UPDATE driver_locations SET availability=$2, ride_id=$3 WHERE driver_id=$1`,
@@ -166,6 +172,22 @@ export class DriverLocationStore {
     return row ? { ...row, recordedAt: new Date(row.recordedAt).toISOString() } : null;
   }
 
+  /** TTL dolmuş olsa bile son kayıtlı konum; çevrim içi olunca GEO'ya geri yüklemek için. */
+  private async lastKnownFromDatabase(driverId: string): Promise<DriverLocationSnapshot | null> {
+    const result = await this.app.db.query<DriverLocationSnapshot & { recordedAt: Date }>(
+      `SELECT l.driver_id AS "driverId", l.latitude, l.longitude, l.heading::float8 AS heading,
+              l.speed_mps::float8 AS "speedMps", l.accuracy_meters::float8 AS "accuracyMeters",
+              d.availability, l.ride_id AS "rideId", l.recorded_at AS "recordedAt",
+              (SELECT v.vehicle_type FROM vehicles v WHERE v.driver_id=d.id AND v.status='active'
+               ORDER BY v.created_at DESC LIMIT 1) AS "vehicleType"
+       FROM driver_locations l JOIN drivers d ON d.id=l.driver_id
+       WHERE l.driver_id=$1`,
+      [driverId],
+    );
+    const row = result.rows[0];
+    return row ? { ...row, recordedAt: new Date(row.recordedAt).toISOString() } : null;
+  }
+
   /**
    * Verilen merkez etrafındaki, TTL içinde sinyal göndermiş sürücüler.
    * Redis GEOSEARCH birincil yol; erişilemezse PostgreSQL üzerinden kaba kutu filtresi uygulanır.
@@ -190,7 +212,7 @@ export class DriverLocationStore {
           'WITHCOORD',
           'WITHDIST',
         )) as Array<[string, string, [string, string]]>;
-        if (!rows.length) return [];
+        if (!rows.length) return this.nearbyFromDatabase(center, radiusMeters);
         const states = await this.redis.hmget(HASH_KEY, ...rows.map(([id]) => id));
         const result: Array<DriverLocationSnapshot & { distanceMeters: number }> = [];
         rows.forEach(([driverId, distance, coordinates], index) => {
@@ -206,6 +228,7 @@ export class DriverLocationStore {
             distanceMeters: Math.round(Number(distance)),
           });
         });
+        if (!result.length) return this.nearbyFromDatabase(center, radiusMeters);
         return result;
       } catch (error) {
         this.app.log.warn({ err: error }, 'Redis yakınlık sorgusu başarısız; PostgreSQL kullanılıyor.');

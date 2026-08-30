@@ -7,6 +7,7 @@ import {
   type DriverEarnings,
   type DriverVehicleInfo,
   type Hotspot,
+  type LocationPing,
 } from '@heytaksi/shared';
 import { AppError } from '../../core/errors/app-error.js';
 
@@ -144,6 +145,10 @@ export class DriverService {
     // Dağıtıma kapanan sürücünün bekleyen teklifi düşer; diğer sürücüler yanıtlamaya devam eder.
     if (next === 'offline' || next === 'paused')
       await this.app.dispatch.releaseDriver(row.id, `driver_${next}`).catch(() => undefined);
+    else
+      await this.app.dispatch.considerNearbySearches(row.id).catch((error) => {
+        this.app.log.warn({ err: error, driverId: row.id }, 'Çevrim içi olunca yakındaki aramalar ilerletilemedi.');
+      });
     this.app.realtime.publishUser(userId, 'driver.updated', result);
     return result;
   }
@@ -152,10 +157,7 @@ export class DriverService {
    * REST konum sinyali. WebSocket kanalı birincil yoldur; bu uç, soket kapalıyken
    * veya arka planda çalışan istemciler için yedek olarak korunur.
    */
-  async updateLocation(
-    userId: string,
-    location: { latitude: number; longitude: number; heading?: number | undefined; accuracyMeters?: number | undefined; speedMps?: number | undefined },
-  ): Promise<{ latitude: number; longitude: number; recordedAt: string }> {
+  async updateLocation(userId: string, location: LocationPing): Promise<{ latitude: number; longitude: number; recordedAt: string }> {
     const snapshot = await this.app.locationService.recordDriverPing(userId, location);
     return {
       latitude: snapshot.latitude,

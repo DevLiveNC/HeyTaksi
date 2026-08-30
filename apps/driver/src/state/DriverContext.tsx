@@ -16,6 +16,7 @@ import type {
   RideMessage,
   RideStatus,
 } from "@heytaksi/shared";
+import { useDriverLocation } from "../hooks/useDriverLocation";
 import { driverApi } from "../services/driverApi";
 import { wsBaseUrl } from "../services/config";
 import { createDriverSocket, type DriverSocket } from "../services/rideSocket";
@@ -35,6 +36,9 @@ interface DriverContextValue {
   busy: boolean;
   error: string | null;
   offerArrivedAt: number | null;
+  location: { latitude: number; longitude: number };
+  gpsOk: boolean;
+  locationError: string | null;
   refreshDashboard(): Promise<void>;
   refreshRide(): Promise<void>;
   clearError(): void;
@@ -95,6 +99,14 @@ export function DriverProvider({ children }: PropsWithChildren) {
     void refreshDashboard();
     void refreshRide();
   }, [user, refreshDashboard, refreshRide]);
+
+  const onDuty = Boolean(dashboard && dashboard.availability !== "offline");
+  const { location, gpsOk, locationError } = useDriverLocation(
+    onDuty,
+    socket,
+    ride?.id ?? null,
+    dashboard?.location ?? null,
+  );
 
   // WS: teklif, durum ve mesaj akışı.
   const rideRef = useRef<string | null>(null);
@@ -185,15 +197,24 @@ export function DriverProvider({ children }: PropsWithChildren) {
     );
     const rideTimer = window.setInterval(
       () => {
-        if (document.visibilityState === "visible" && connection !== "live") void refreshRide();
+        // WS Vercel'de süreçler arası yayın yapamaz; teklif REST ile de gelmeli.
+        if (document.visibilityState === "visible") void refreshRide();
       },
-      6_000,
+      3_000,
     );
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshRide();
+        void refreshDashboard();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearInterval(dashboardTimer);
       window.clearInterval(rideTimer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [user, connection, refreshDashboard, refreshRide]);
+  }, [user, refreshDashboard, refreshRide]);
 
   const run = useCallback(async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -223,8 +244,9 @@ export function DriverProvider({ children }: PropsWithChildren) {
         );
         await driverApi.setAvailability(fetcherRef.current, target);
         await refreshDashboard();
+        await refreshRide();
       }),
-    [run, refreshDashboard],
+    [run, refreshDashboard, refreshRide],
   );
 
   const acceptOffer = useCallback(
@@ -322,6 +344,9 @@ export function DriverProvider({ children }: PropsWithChildren) {
       busy,
       error,
       offerArrivedAt,
+      location,
+      gpsOk,
+      locationError,
       refreshDashboard,
       refreshRide,
       clearError: () => setError(null),
@@ -341,6 +366,7 @@ export function DriverProvider({ children }: PropsWithChildren) {
     }),
     [
       dashboard, ride, socket, offerExpiresAt, messages, connection, busy, error, offerArrivedAt,
+      location, gpsOk, locationError,
       refreshDashboard, refreshRide, setAvailability, acceptOffer, rejectOffer,
       advance, startRide, cancelRide, sendMessage, markPassengerRated,
     ],

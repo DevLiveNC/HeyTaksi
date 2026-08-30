@@ -160,6 +160,16 @@ describe('dağıtım parametreleri', () => {
     expect(DISPATCH_OFFER_TTL_SECONDS).toBeLessThanOrEqual(60);
   });
 
+  it('sürücü sonradan çevrim içi olunca en geniş yarıçaptaki açık aramalar taranır', () => {
+    const maxRadius = DISPATCH_RADIUS_STEPS_METERS[DISPATCH_RADIUS_STEPS_METERS.length - 1]!;
+    expect(maxRadius).toBe(12_000);
+    const pickup = { latitude: 36.8121, longitude: 34.6415 };
+    const nearby = { latitude: 36.82, longitude: 34.65 };
+    const far = { latitude: 41.0082, longitude: 28.9784 };
+    expect(haversineMeters(pickup, nearby)).toBeLessThan(maxRadius);
+    expect(haversineMeters(pickup, far)).toBeGreaterThan(maxRadius);
+  });
+
   it('eşzamanlı yayın en fazla 50 sürücüye gider ve sıralamayı korur', () => {
     expect(DISPATCH_BROADCAST_MAX_DRIVERS).toBe(50);
     const ranked = Array.from({ length: 80 }, (_, index) => ({ id: `d${index}` }));

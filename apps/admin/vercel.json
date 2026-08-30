@@ -3,6 +3,16 @@
   "buildCommand": "cd ../.. && npm run build --workspace=@heytaksi/shared && npm run build --workspace=@heytaksi/admin",
   "outputDirectory": "dist",
   "functions": { "api/index.js": { "maxDuration": 30 } },
+  "env": {
+    "VITE_MAP_PROVIDER": "osm",
+    "VITE_MAP_STYLE_URL": "https://tiles.openfreemap.org/styles/liberty"
+  },
+  "build": {
+    "env": {
+      "VITE_MAP_PROVIDER": "osm",
+      "VITE_MAP_STYLE_URL": "https://tiles.openfreemap.org/styles/liberty"
+    }
+  },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api?rest=/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

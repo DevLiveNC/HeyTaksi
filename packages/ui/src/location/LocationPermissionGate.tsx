@@ -55,8 +55,8 @@ export function LocationPermissionGate({ audience }: { audience: 'passenger' | '
           </div>
         )}
         {error && permission !== 'denied' && permission !== 'unsupported' && <p className="ht-location-error">{error}</p>}
-        <button type="button" disabled={loading || unsupported} onClick={() => void request()}>
-          {loading ? 'Konum isteniyor…' : denied ? 'İzni tekrar dene' : 'Konuma izin ver'}
+        <button type="button" disabled={(loading && !denied) || unsupported} onClick={() => void request()}>
+          {denied ? 'İzni tekrar dene' : loading ? 'Konum isteniyor…' : 'Konuma izin ver'}
         </button>
       </section>
     </div>

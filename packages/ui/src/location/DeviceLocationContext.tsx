@@ -111,6 +111,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
           setLocation(null);
           setHeading(undefined);
           stopWatch();
+          setLoading(false);
         }
       },
       GEO_WATCH_OPTIONS,
@@ -153,6 +154,14 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
         },
         GEO_WATCH_OPTIONS,
       );
+      void queryGeoPermission().then((state) => {
+        if (state === 'denied') {
+          setPermission('denied');
+          setLocation(null);
+          stopWatch();
+          finish(false);
+        }
+      });
     });
   }, [applyPosition, stopWatch]);
 
@@ -182,6 +191,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
           if (status.state === 'denied') {
             setLocation(null);
             setHeading(undefined);
+            setLoading(false);
             stopWatch();
           }
         };

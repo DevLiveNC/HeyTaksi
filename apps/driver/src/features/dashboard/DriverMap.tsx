@@ -6,10 +6,11 @@ import {
   createHtmlMarker,
   enhanceOsmMap,
   GoogleMapHost,
+  osmKktcMapView,
   osmStyleUrl,
   type HtmlMapMarker,
 } from "@heytaksi/ui";
-import type { Coordinate, DriverRideDetail, Hotspot, RouteEstimate } from "@heytaksi/shared";
+import { DEFAULT_MAP_CENTER, isInKktcServiceArea, type Coordinate, type DriverRideDetail, type Hotspot, type RouteEstimate } from "@heytaksi/shared";
 
 interface Props {
   driverLocation: { latitude: number; longitude: number };
@@ -36,8 +37,11 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
     const map = new maplibregl.Map({
       container: container.current,
       style: osmStyleUrl("light"),
-      center: [driverLocation.longitude, driverLocation.latitude],
-      zoom: 13,
+      ...osmKktcMapView(
+        isInKktcServiceArea(driverLocation.latitude, driverLocation.longitude)
+          ? driverLocation
+          : DEFAULT_MAP_CENTER,
+      ),
       attributionControl: {},
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -289,7 +293,11 @@ export function DriverMap(props: Props) {
         className={props.className ?? "driver-map"}
         ariaLabel="Sürücü haritası"
         dark
-        center={{ lat: props.driverLocation.latitude, lng: props.driverLocation.longitude }}
+        center={
+          isInKktcServiceArea(props.driverLocation.latitude, props.driverLocation.longitude)
+            ? { lat: props.driverLocation.latitude, lng: props.driverLocation.longitude }
+            : { lat: DEFAULT_MAP_CENTER.latitude, lng: DEFAULT_MAP_CENTER.longitude }
+        }
         onReady={onReady}
         fallback={<MapLibreDriverMap {...props} />}
       />

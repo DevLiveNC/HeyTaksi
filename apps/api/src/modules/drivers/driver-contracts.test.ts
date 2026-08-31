@@ -41,9 +41,9 @@ describe('driver availability contracts', () => {
 
   it('accepts desktop-grade GPS accuracy on location pings', () => {
     expect(
-      locationPingSchema.safeParse({ latitude: 36.8121, longitude: 34.6415, accuracyMeters: 2500 }).success,
+      locationPingSchema.safeParse({ latitude: 35.1856, longitude: 33.3823, accuracyMeters: 2500 }).success,
     ).toBe(true);
-    expect(locationPingSchema.safeParse({ latitude: 36.8121, longitude: 34.6415 }).success).toBe(true);
+    expect(locationPingSchema.safeParse({ latitude: 35.1856, longitude: 33.3823 }).success).toBe(true);
   });
 });
 

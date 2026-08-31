@@ -2,7 +2,7 @@ import 'dotenv/config';
 import argon2 from 'argon2';
 import pg from 'pg';
 import { z } from 'zod';
-import { DEFAULT_MAP_CENTER } from '@heytaksi/shared';
+import { kktcPlaceById } from '@heytaksi/shared';
 import { env } from '../../config/env.js';
 
 /**
@@ -13,8 +13,6 @@ import { env } from '../../config/env.js';
 const input = z
   .object({
     DEMO_FLEET_PASSWORD: z.string().min(10).default('FleetDemo2026!'),
-    DEMO_FLEET_CENTER_LAT: z.coerce.number().default(DEFAULT_MAP_CENTER.latitude),
-    DEMO_FLEET_CENTER_LON: z.coerce.number().default(DEFAULT_MAP_CENTER.longitude),
   })
   .parse(process.env);
 
@@ -32,20 +30,19 @@ interface FleetDriver {
   acceptanceRate: number;
   cancellationRate: number;
   totalRides: number;
-  /** Merkeze göre konum kayması (derece). */
-  offset: [number, number];
+  placeId: string;
   availability: 'online' | 'available' | 'paused';
 }
 
 const fleet: FleetDriver[] = [
-  { slug: 'ayse', firstName: 'Ayşe', lastName: 'Kaya', phone: '+905331110101', plate: '33HT0101', brand: 'Toyota', model: 'Corolla', color: 'Beyaz', vehicleType: 'standard', rating: 4.92, acceptanceRate: 96, cancellationRate: 2, totalRides: 1840, offset: [0.004, 0.003], availability: 'online' },
-  { slug: 'mehmet', firstName: 'Mehmet', lastName: 'Aydın', phone: '+905331110102', plate: '33HT0102', brand: 'Renault', model: 'Megane', color: 'Gri', vehicleType: 'standard', rating: 4.61, acceptanceRate: 78, cancellationRate: 9, totalRides: 920, offset: [-0.006, 0.005], availability: 'online' },
-  { slug: 'zeynep', firstName: 'Zeynep', lastName: 'Demirci', phone: '+905331110103', plate: '33HT0103', brand: 'Volkswagen', model: 'Passat', color: 'Siyah', vehicleType: 'comfort', rating: 4.88, acceptanceRate: 91, cancellationRate: 4, totalRides: 1310, offset: [0.009, -0.007], availability: 'online' },
-  { slug: 'hasan', firstName: 'Hasan', lastName: 'Yıldız', phone: '+905331110104', plate: '33HT0104', brand: 'Ford', model: 'Tourneo', color: 'Lacivert', vehicleType: 'xl', rating: 4.74, acceptanceRate: 88, cancellationRate: 6, totalRides: 640, offset: [-0.012, -0.004], availability: 'online' },
-  { slug: 'elif', firstName: 'Elif', lastName: 'Şahin', phone: '+905331110105', plate: '33HT0105', brand: 'Fiat', model: 'Doblo', color: 'Beyaz', vehicleType: 'accessible', rating: 4.95, acceptanceRate: 97, cancellationRate: 1, totalRides: 410, offset: [0.014, 0.011], availability: 'online' },
-  { slug: 'burak', firstName: 'Burak', lastName: 'Öztürk', phone: '+905331110106', plate: '33HT0106', brand: 'Hyundai', model: 'i20', color: 'Kırmızı', vehicleType: 'standard', rating: 4.35, acceptanceRate: 64, cancellationRate: 14, totalRides: 280, offset: [0.002, -0.009], availability: 'online' },
-  { slug: 'canan', firstName: 'Canan', lastName: 'Arslan', phone: '+905331110107', plate: '33HT0107', brand: 'Skoda', model: 'Superb', color: 'Gümüş', vehicleType: 'comfort', rating: 4.79, acceptanceRate: 85, cancellationRate: 5, totalRides: 1120, offset: [-0.017, 0.013], availability: 'paused' },
-  { slug: 'okan', firstName: 'Okan', lastName: 'Çelik', phone: '+905331110108', plate: '33HT0108', brand: 'Peugeot', model: '301', color: 'Beyaz', vehicleType: 'standard', rating: 4.68, acceptanceRate: 82, cancellationRate: 7, totalRides: 760, offset: [0.021, -0.016], availability: 'online' },
+  { slug: 'ayse', firstName: 'Ayşe', lastName: 'Kaya', phone: '+905331110101', plate: 'HT101', brand: 'Toyota', model: 'Corolla', color: 'Beyaz', vehicleType: 'standard', rating: 4.92, acceptanceRate: 96, cancellationRate: 2, totalRides: 1840, placeId: 'lefkosa', availability: 'online' },
+  { slug: 'mehmet', firstName: 'Mehmet', lastName: 'Aydın', phone: '+905331110102', plate: 'HT102', brand: 'Renault', model: 'Megane', color: 'Gri', vehicleType: 'standard', rating: 4.61, acceptanceRate: 78, cancellationRate: 9, totalRides: 920, placeId: 'girne', availability: 'online' },
+  { slug: 'zeynep', firstName: 'Zeynep', lastName: 'Demirci', phone: '+905331110103', plate: 'HT103', brand: 'Volkswagen', model: 'Passat', color: 'Siyah', vehicleType: 'comfort', rating: 4.88, acceptanceRate: 91, cancellationRate: 4, totalRides: 1310, placeId: 'gazimagusa', availability: 'online' },
+  { slug: 'hasan', firstName: 'Hasan', lastName: 'Yıldız', phone: '+905331110104', plate: 'HT104', brand: 'Ford', model: 'Tourneo', color: 'Lacivert', vehicleType: 'xl', rating: 4.74, acceptanceRate: 88, cancellationRate: 6, totalRides: 640, placeId: 'guzelyurt', availability: 'online' },
+  { slug: 'elif', firstName: 'Elif', lastName: 'Şahin', phone: '+905331110105', plate: 'HT105', brand: 'Fiat', model: 'Doblo', color: 'Beyaz', vehicleType: 'accessible', rating: 4.95, acceptanceRate: 97, cancellationRate: 1, totalRides: 410, placeId: 'ercan', availability: 'online' },
+  { slug: 'burak', firstName: 'Burak', lastName: 'Öztürk', phone: '+905331110106', plate: 'HT106', brand: 'Hyundai', model: 'i20', color: 'Kırmızı', vehicleType: 'standard', rating: 4.35, acceptanceRate: 64, cancellationRate: 14, totalRides: 280, placeId: 'gonyeli', availability: 'online' },
+  { slug: 'canan', firstName: 'Canan', lastName: 'Arslan', phone: '+905331110107', plate: 'HT107', brand: 'Skoda', model: 'Superb', color: 'Gümüş', vehicleType: 'comfort', rating: 4.79, acceptanceRate: 85, cancellationRate: 5, totalRides: 1120, placeId: 'iskele', availability: 'paused' },
+  { slug: 'okan', firstName: 'Okan', lastName: 'Çelik', phone: '+905331110108', plate: 'HT108', brand: 'Peugeot', model: '301', color: 'Beyaz', vehicleType: 'standard', rating: 4.68, acceptanceRate: 82, cancellationRate: 7, totalRides: 760, placeId: 'lefke', availability: 'online' },
 ];
 
 const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
@@ -82,7 +79,9 @@ try {
          vehicle_type=EXCLUDED.vehicle_type,updated_at=NOW()`,
       [driverId, member.plate, member.brand, member.model, member.color, member.vehicleType],
     );
-    // Konum defteri: API ilk sinyale kadar bu kaydı fallback olarak kullanır.
+    const place = kktcPlaceById(member.placeId);
+    if (!place) throw new Error(`KKTC katalogunda ${member.placeId} yok`);
+    const jitter = (member.slug.charCodeAt(0) % 7) * 0.0015;
     await client.query(
       `INSERT INTO driver_locations(driver_id,latitude,longitude,heading,availability,recorded_at)
        VALUES($1,$2,$3,$4,$5,NOW())
@@ -90,9 +89,9 @@ try {
          availability=EXCLUDED.availability,recorded_at=NOW()`,
       [
         driverId,
-        input.DEMO_FLEET_CENTER_LAT + member.offset[0],
-        input.DEMO_FLEET_CENTER_LON + member.offset[1],
-        Math.round(Math.abs((member.offset[0] * 3600) % 360)),
+        place.latitude + jitter,
+        place.longitude - jitter * 0.6,
+        Math.round(Math.abs((place.latitude * 3600) % 360)),
         member.availability,
       ],
     );

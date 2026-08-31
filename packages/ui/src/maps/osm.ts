@@ -1,11 +1,21 @@
 import {
   DEFAULT_MAP_CENTER,
+  KKTC_MAP_MIN_ZOOM,
   MAP_LABEL_LANGUAGE,
   OSM_DARK_STYLE_URL,
   OSM_LIGHT_STYLE_URL,
+  kktcMapMaxBoundsLngLat,
 } from '@heytaksi/shared';
 
-export { DEFAULT_MAP_CENTER, MAP_LABEL_LANGUAGE, OSM_DARK_STYLE_URL, OSM_LIGHT_STYLE_URL };
+export {
+  DEFAULT_MAP_CENTER,
+  KKTC_MAP_MIN_ZOOM,
+  MAP_LABEL_LANGUAGE,
+  OSM_DARK_STYLE_URL,
+  OSM_LIGHT_STYLE_URL,
+  kktcGoogleLatLngBounds,
+  kktcMapMaxBoundsLngLat,
+} from '@heytaksi/shared';
 
 type ViteEnv = { env?: Record<string, string | undefined> };
 
@@ -30,6 +40,23 @@ export function defaultMapLngLat(
   point: { latitude: number; longitude: number } = DEFAULT_MAP_CENTER,
 ): [number, number] {
   return [point.longitude, point.latitude];
+}
+
+/** KKTC kamera kısıtı: üç uygulamadaki MapLibre init bu seçenekleri paylaşır. */
+export function osmKktcMapView(
+  center: { latitude: number; longitude: number } = DEFAULT_MAP_CENTER,
+): {
+  center: [number, number];
+  zoom: number;
+  minZoom: number;
+  maxBounds: [[number, number], [number, number]];
+} {
+  return {
+    center: defaultMapLngLat(center),
+    zoom: 13,
+    minZoom: KKTC_MAP_MIN_ZOOM,
+    maxBounds: kktcMapMaxBoundsLngLat(),
+  };
 }
 
 /**

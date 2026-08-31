@@ -28,7 +28,7 @@ npm run db:seed-all-demo
 - **Telefon:** +905331110002
 - **Ad Soyad:** Demo Sürücü
 - **Rol:** driver
-- **Araç:** 34DMO001 - Toyota Corolla 2023 Beyaz (standard)
+- **Araç:** HT001 - Toyota Corolla 2023 Beyaz (standard)
 - **Durum:** verified, rating 4.92, offline
 - **Giriş:** Sürücü uygulaması http://localhost:5174
 

@@ -12,7 +12,7 @@ import {
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@heytaksi/ui";
-import type { RideHistoryItem } from "@heytaksi/shared";
+import { KKTC_OUTSIDE_LOCATION_MESSAGE, type RideHistoryItem } from "@heytaksi/shared";
 const MapCanvas = lazy(() => import("./MapCanvas").then((module) => ({ default: module.MapCanvas })));
 import { usePassengerExperience, type Address } from "../../state/PassengerExperience";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
@@ -54,10 +54,14 @@ export function HomePage() {
 
   return (
     <div className="home-page">
-      <div className={`location-kicker ${geo.blocked ? "needs-permission" : ""}`}>
+      <div className={`location-kicker ${geo.blocked || geo.outsideServiceArea ? "needs-permission" : ""}`}>
         <MapPin size={13} />
-        <span>Mevcut konum</span>
-        <strong>{geo.location?.address ?? (geo.blocked ? "Konum izni gerekli" : "Konum alınıyor…")}</strong>
+        <span>{geo.outsideServiceArea ? "Hizmet bölgesi" : "Mevcut konum"}</span>
+        <strong>
+          {geo.outsideServiceArea
+            ? KKTC_OUTSIDE_LOCATION_MESSAGE
+            : (geo.location?.address ?? (geo.blocked ? "Konum izni gerekli" : "Konum alınıyor…"))}
+        </strong>
       </div>
       <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}>
         <MapCanvas />

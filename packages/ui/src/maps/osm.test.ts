@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { enhanceOsmMap, preferredMapProvider, osmKktcMapView, type OsmMapLike } from './osm';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  enhanceOsmMap,
+  preferredMapProvider,
+  osmKktcMapView,
+  shouldFallbackOsmStyle,
+  bindOsmStyleFallback,
+  OSM_RASTER_FALLBACK_STYLE,
+  type OsmMapLike,
+} from './osm';
 
 describe('osmKktcMapView', () => {
   it('KKTC maxBounds ve minZoom verir', () => {
@@ -50,5 +58,39 @@ describe('enhanceOsmMap', () => {
     expect(layoutUpdates.map(([id]) => id)).toEqual(['label_city', 'poi_r1']);
     expect(layoutUpdates[0]?.[1]).toEqual(['coalesce', ['get', 'name:tr'], ['get', 'name:latin'], ['get', 'name']]);
     expect(zoomRanges).toEqual([['poi_r1', 12, 24]]);
+  });
+});
+
+describe('shouldFallbackOsmStyle', () => {
+  it('stil yüklenmeden gelen hatada yedekler', () => {
+    expect(shouldFallbackOsmStyle(false)).toBe(true);
+  });
+
+  it('stil yüklendikten sonra karo/worker hatasında yedekler', () => {
+    expect(shouldFallbackOsmStyle(true, { status: 404 })).toBe(true);
+    expect(shouldFallbackOsmStyle(true, { message: 'Failed to construct Worker' })).toBe(true);
+  });
+
+  it('ilgisiz stildeki hatayı yok sayar', () => {
+    expect(shouldFallbackOsmStyle(true, { message: 'image missing' })).toBe(false);
+  });
+});
+
+describe('bindOsmStyleFallback', () => {
+  it('stil yüklenemezse raster OSM stilini uygular', () => {
+    let errorListener: ((...args: unknown[]) => void) | undefined;
+    const setStyle = vi.fn();
+    bindOsmStyleFallback(
+      {
+        on: (_type, listener) => {
+          errorListener = listener;
+        },
+        setStyle,
+        isStyleLoaded: () => false,
+      },
+      undefined,
+    );
+    errorListener?.({ error: { status: 503 } });
+    expect(setStyle).toHaveBeenCalledWith(OSM_RASTER_FALLBACK_STYLE);
   });
 });

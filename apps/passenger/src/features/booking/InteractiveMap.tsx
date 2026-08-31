@@ -2,13 +2,12 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance, MapMouseEvent } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  bindOsmStyleFallback,
   createHtmlMarker,
   DEFAULT_MAP_CENTER,
-  enhanceOsmMap,
   GoogleMapHost,
   osmKktcMapView,
   osmStyleUrl,
+  wireOsmMap,
 } from "@heytaksi/ui";
 import type { HtmlMapMarker } from "@heytaksi/ui";
 import { isInKktcServiceArea, type Coordinate, type RouteEstimate } from "@heytaksi/shared";
@@ -65,12 +64,10 @@ function MapLibreInteractiveMap({
     map.on("click", (event: MapMouseEvent) =>
       onMapClick?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }),
     );
-    bindOsmStyleFallback(map);
-    const enhance = () => enhanceOsmMap(map);
-    map.on("load", enhance);
-    map.on("style.load", enhance);
+    const unwire = wireOsmMap(map);
     mapRef.current = map;
     return () => {
+      unwire();
       map.remove();
       mapRef.current = null;
       nearbyMarkers.current.clear();

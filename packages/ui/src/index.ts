@@ -25,6 +25,8 @@ export {
   osmKktcMapView,
   osmStyleUrl,
   preferredMapProvider,
+  shouldFallbackOsmStyle,
+  wireOsmMap,
   OSM_RASTER_FALLBACK_STYLE,
 } from './maps/osm';
 export {

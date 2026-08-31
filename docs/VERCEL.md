@@ -17,12 +17,12 @@ Frontend SPA rewrite `/api` yollarını **hariç tutar**; aksi halde `POST /api/
 - `VITE_API_URL=https://hey-taksi-api.vercel.app/api/v1` (doğrudan API; build zamanında gerekir)
 - `VITE_API_URL` **API proje hostu** olmalıdır (`hey-taksi-api.vercel.app`). `https://hey-taksi.vercel.app` bir SPA alias'ıdır; API yoktur ve yönetim girişi tarayıcıda "Sunucuya bağlanılamadı" gösterir. Yanlış host verilirse uygulama aynı origin `/api` proxy'sine düşer.
 - `VITE_WS_URL=wss://<realtime-domain>/ws`
-- `VITE_MAP_PROVIDER=osm` (şimdilik OpenStreetMap; Google için `google`)
+- `VITE_MAP_PROVIDER=osm` (OpenStreetMap/MapLibre; anahtar gerekmez). Düz renk harita için önce dashboard’da bunun `google` kalmadığını kontrol edin.
 - `VITE_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty` (Türkçe etiket + POI)
-- `VITE_GOOGLE_MAPS_API_KEY=` (Maps JavaScript API; yalnızca `VITE_MAP_PROVIDER=google` iken)
+- `VITE_GOOGLE_MAPS_API_KEY=` yalnızca `VITE_MAP_PROVIDER=google` iken zorunlu (Maps JavaScript API, HTTP referrer kısıtlı)
 - API Project: `MAP_PROVIDER=osm`, `GEOCODING_URL=https://nominatim.openstreetmap.org`, `ROUTING_URL=https://router.project-osrm.org`. Google’a geçince `MAP_PROVIDER=google` + `GOOGLE_MAPS_API_KEY` / `GOOGLE_MAPS_BROWSER_KEY`
 
-Bu OSM değerleri ayrıca her frontend `vercel.json` / `.env.production` ve API `vercel.json` `env` alanına yazılmıştır; bir sonraki deploy’da build’e girer. Dashboard’da `VITE_MAP_PROVIDER=google` varsa onu `osm` yapın, aksi halde panel değeri kazanır.
+Bu OSM değerleri ayrıca her frontend `vercel.json` / `.env.production` ve API `vercel.json` `env` alanına yazılmıştır; bir sonraki deploy’da build’e girer. **Vercel Project → Environment Variables** içinde `VITE_MAP_PROVIDER=google` varsa onu `osm` yapın veya silin; panel değeri `vercel.json`’daki osm varsayılanını ezer ve Google anahtarı yoksa harita boş/düz renk kalır.
 
 API Project'ine Neon `DATABASE_URL` (veya Vercel Postgres `POSTGRES_URL`) ile `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` eklenmelidir. `CORS_ORIGINS` içine frontend origin'lerini yazabilirsiniz; Hey Taksi `*.vercel.app` hostları ayrıca otomatik kabul edilir.
 

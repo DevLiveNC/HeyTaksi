@@ -2,7 +2,7 @@ import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapInstance } from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_MAP_CENTER, type LiveDriverMarker, type LiveRideMarker } from '@heytaksi/shared';
-import { bindOsmStyleFallback, enhanceOsmMap, GoogleMapHost, osmStyleUrl } from '@heytaksi/ui';
+import { bindOsmStyleFallback, enhanceOsmMap, GoogleMapHost, osmKktcMapView, osmStyleUrl } from '@heytaksi/ui';
 
 interface Props {
   drivers: LiveDriverMarker[];
@@ -98,7 +98,7 @@ export function MapLibreLiveMap({ drivers, rides, selectedRideId, selectedDriver
     const map = new maplibregl.Map({
       container: container.current,
       style: osmStyleUrl('light'),
-      center: FALLBACK_CENTER,
+      ...osmKktcMapView(),
       zoom: 12,
       attributionControl: {},
     });

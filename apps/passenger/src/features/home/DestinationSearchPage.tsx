@@ -11,7 +11,13 @@ import {
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { coordinatesClose, locatingPickupLabel, useAuth } from "@heytaksi/ui";
-import type { Coordinate } from "@heytaksi/shared";
+import {
+  KKTC_OUTSIDE_LOCATION_MESSAGE,
+  isInKktcServiceArea,
+  kktcPlaceToSearchHit,
+  matchKktcPlaces,
+  type Coordinate,
+} from "@heytaksi/shared";
 import { InteractiveMap } from "../booking/InteractiveMap";
 import { useBooking } from "../booking/BookingContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
@@ -65,19 +71,17 @@ export function DestinationSearchPage() {
     };
   }, [auth.authorizedFetch, booking.pickup?.latitude, booking.pickup?.longitude, booking.pickup?.address]);
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults(matchKktcPlaces(trimmed).map(kktcPlaceToSearchHit));
       return;
     }
-    const near = booking.pickup ?? geo.location;
-    if (!near) {
-      setResults([]);
-      return;
-    }
+    const near = booking.pickup ?? geo.location ?? undefined;
     const timer = setTimeout(() => {
       setLoading(true);
+      setError("");
       locationApi
-        .search(auth.authorizedFetch, query, near)
+        .search(auth.authorizedFetch, trimmed, near)
         .then(setResults)
         .catch((cause) =>
           setError(cause instanceof Error ? cause.message : "Adres aranamadı"),
@@ -92,28 +96,29 @@ export function DestinationSearchPage() {
     setResults([]);
     setPinMode(null);
   };
+  const applyMapPoint = (resolved: Coordinate, pickingPickup: boolean) => {
+    if (pickingPickup) {
+      booking.setPickup(resolved);
+      setPinMode(booking.destination ? null : "destination");
+    } else {
+      void selectDestination(resolved);
+    }
+  };
   const mapClick = async (point: { latitude: number; longitude: number }) => {
-    if (!pinMode) return;
+    const pickingPickup = !booking.pickup || pinMode === "pickup";
+    if (!pickingPickup && pinMode !== "destination") return;
     setLoading(true);
+    setError("");
     const fallback: Coordinate = {
       latitude: point.latitude,
       longitude: point.longitude,
       address: `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`,
     };
     try {
-      const resolved = await locationApi.reverse(auth.authorizedFetch, point);
-      if (pinMode === "pickup") {
-        booking.setPickup(resolved);
-        setPinMode(booking.destination ? null : "destination");
-      } else {
-        await selectDestination(resolved);
-      }
+      applyMapPoint(await locationApi.reverse(auth.authorizedFetch, point), pickingPickup);
     } catch (cause) {
-      if (pinMode === "pickup") {
-        booking.setPickup(fallback);
-        setPinMode(booking.destination ? null : "destination");
-      } else {
-        await selectDestination(fallback);
+      if (isInKktcServiceArea(point.latitude, point.longitude)) {
+        applyMapPoint(fallback, pickingPickup);
       }
       setError(cause instanceof Error ? cause.message : "Konum bulunamadı");
     } finally {
@@ -143,8 +148,9 @@ export function DestinationSearchPage() {
     address: booking.pickup?.address ?? null,
     blocked: geo.blocked,
     loading: geo.loading,
-    hasFix: geo.hasFix,
+    hasFix: Boolean(geo.location),
     failed: Boolean(geo.error),
+    outsideServiceArea: geo.outsideServiceArea,
   });
   return (
     <div className="booking-map-page">
@@ -197,17 +203,26 @@ export function DestinationSearchPage() {
             <MapPin />
           </button>
         </div>
+        {geo.outsideServiceArea && (
+          <p className="permission-warning">{KKTC_OUTSIDE_LOCATION_MESSAGE}</p>
+        )}
         {geo.blocked && (
           <p className="permission-warning">
             Konum izni kapalı. Yakındaki taksileri ve doğru alış noktasını kullanmak için konuma izin vermen gerekir.
           </p>
         )}
-        {!geo.blocked && !booking.pickup && !geo.loading && (
+        {!geo.blocked && !geo.outsideServiceArea && !booking.pickup && !geo.loading && (
           <p className="permission-warning">
             Konum alınamadı. Alış noktasını haritadan seçebilir veya konum düğmesine tekrar basabilirsin.
           </p>
         )}
-        {pinMode && (
+        {!booking.pickup && (
+          <div className="pin-hint">
+            <Navigation />
+            Haritada alış noktasına dokun
+          </div>
+        )}
+        {pinMode && booking.pickup && (
           <div className="pin-hint">
             <Navigation />
             {pinMode === "pickup" ? "Haritada alış noktasını seç" : "Haritada varış noktasına dokun"}

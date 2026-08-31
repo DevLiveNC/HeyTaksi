@@ -1,13 +1,9 @@
-import { DEFAULT_MAP_CENTER, kktcViewboxParam, nearbyViewboxParam } from '@heytaksi/shared';
+import { DEFAULT_MAP_CENTER, formatKktcAddress, kktcViewboxParam } from '@heytaksi/shared';
 
 export { DEFAULT_MAP_CENTER };
 
-/** Küresel Nominatim araması; konum yoksa KKTC'ye ağırlık verir, ülke kodu kısıtı yoktur. */
-export function buildNominatimSearchUrl(
-  baseUrl: string,
-  query: string,
-  near?: { latitude: number; longitude: number },
-): URL {
+/** KKTC kutusuna kilitli Nominatim araması; `near` yalnızca çağıran tarafta sıralama içindir. */
+export function buildNominatimSearchUrl(baseUrl: string, query: string): URL {
   const url = new URL('/search', baseUrl);
   url.searchParams.set('q', query);
   url.searchParams.set('format', 'jsonv2');
@@ -15,7 +11,8 @@ export function buildNominatimSearchUrl(
   url.searchParams.set('extratags', '1');
   url.searchParams.set('namedetails', '1');
   url.searchParams.set('limit', '8');
-  url.searchParams.set('viewbox', near ? nearbyViewboxParam(near) : kktcViewboxParam());
+  url.searchParams.set('viewbox', kktcViewboxParam());
+  url.searchParams.set('bounded', '1');
   return url;
 }
 
@@ -33,3 +30,23 @@ export function buildNominatimReverseUrl(baseUrl: string, latitude: number, long
 export const NOMINATIM_HEADERS = {
   'accept-language': 'tr',
 } as const;
+
+export interface NominatimPlace {
+  place_id?: number;
+  name?: string;
+  display_name?: string;
+  lat?: string;
+  lon?: string;
+  type?: string;
+  namedetails?: Record<string, string | undefined>;
+  address?: Record<string, string | undefined>;
+}
+
+export function nominatimPlaceAddress(item: NominatimPlace): string {
+  return formatKktcAddress({
+    name: item.name,
+    displayName: item.display_name,
+    namedetails: item.namedetails,
+    address: item.address,
+  });
+}

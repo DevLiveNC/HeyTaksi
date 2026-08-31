@@ -201,8 +201,10 @@ export function locatingPickupLabel(options: {
   loading: boolean;
   hasFix: boolean;
   failed?: boolean;
+  outsideServiceArea?: boolean;
 }): string {
   if (options.address) return options.address;
+  if (options.outsideServiceArea) return 'Haritadan alış noktası seç';
   if (options.blocked) return 'Konum izni gerekli';
   if (options.hasFix) return 'Mevcut konum';
   if (options.failed && !options.loading) return 'Alış noktasını haritadan seç';

@@ -34,19 +34,23 @@ export function MapCanvas() {
         <Navigation size={13} />
         <span>
           <strong>
-            {geo.blocked
-              ? "Konum izni gerekli"
-              : !geo.location
-                ? geo.loading
-                  ? "Konum alınıyor…"
-                  : "Konum alınamadı"
-              : loading
-                ? "Sürücüler aranıyor…"
-                : drivers.length
-                  ? `${drivers.length} taksi yakınında`
-                  : "Şu anda yakında taksi yok"}
+            {geo.outsideServiceArea
+              ? "Hizmet bölgesi dışı"
+              : geo.blocked
+                ? "Konum izni gerekli"
+                : !geo.location
+                  ? geo.loading
+                    ? "Konum alınıyor…"
+                    : "Konum alınamadı"
+                  : loading
+                    ? "Sürücüler aranıyor…"
+                    : drivers.length
+                      ? `${drivers.length} taksi yakınında`
+                      : "Şu anda yakında taksi yok"}
           </strong>
-          {geo.loading
+          {geo.outsideServiceArea
+            ? "Haritadan alış noktası seç"
+            : geo.loading
             ? "Konum bulunuyor…"
             : closestEtaSeconds != null
               ? `En yakını ${Math.max(1, Math.round(closestEtaSeconds / 60))} dk uzaklıkta`

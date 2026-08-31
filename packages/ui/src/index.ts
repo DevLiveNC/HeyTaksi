@@ -22,6 +22,7 @@ export {
   bindOsmStyleFallback,
   defaultMapLngLat,
   enhanceOsmMap,
+  osmKktcMapView,
   osmStyleUrl,
   preferredMapProvider,
   OSM_RASTER_FALLBACK_STYLE,

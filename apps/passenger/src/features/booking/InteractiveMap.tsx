@@ -5,13 +5,13 @@ import {
   bindOsmStyleFallback,
   createHtmlMarker,
   DEFAULT_MAP_CENTER,
-  defaultMapLngLat,
   enhanceOsmMap,
   GoogleMapHost,
+  osmKktcMapView,
   osmStyleUrl,
 } from "@heytaksi/ui";
 import type { HtmlMapMarker } from "@heytaksi/ui";
-import type { Coordinate, RouteEstimate } from "@heytaksi/shared";
+import { isInKktcServiceArea, type Coordinate, type RouteEstimate } from "@heytaksi/shared";
 
 function cameraKey(
   pickup?: Coordinate | null,
@@ -56,8 +56,9 @@ function MapLibreInteractiveMap({
     const map = new maplibregl.Map({
       container: container.current,
       style: osmStyleUrl("light"),
-      center: defaultMapLngLat(pickup ?? DEFAULT_MAP_CENTER),
-      zoom: 13,
+      ...osmKktcMapView(
+        pickup && isInKktcServiceArea(pickup.latitude, pickup.longitude) ? pickup : DEFAULT_MAP_CENTER,
+      ),
       attributionControl: {},
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -134,7 +135,7 @@ function MapLibreInteractiveMap({
         );
         bounds.extend([destination.longitude, destination.latitude]);
         map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
-      } else if (pickup) {
+      } else if (pickup && isInKktcServiceArea(pickup.latitude, pickup.longitude)) {
         map.easeTo({ center: [pickup.longitude, pickup.latitude], duration: 400 });
       }
     }
@@ -232,7 +233,7 @@ function GoogleInteractiveMap({
         bounds.extend({ lat: pickup.latitude, lng: pickup.longitude });
         bounds.extend({ lat: destination.latitude, lng: destination.longitude });
         map.fitBounds(bounds, 70);
-      } else if (pickup) {
+      } else if (pickup && isInKktcServiceArea(pickup.latitude, pickup.longitude)) {
         map.panTo({ lat: pickup.latitude, lng: pickup.longitude });
       }
     }
@@ -257,8 +258,14 @@ export function InteractiveMap(props: Props) {
         className={className}
         ariaLabel="Yolculuk haritası"
         center={{
-          lat: props.pickup?.latitude ?? DEFAULT_MAP_CENTER.latitude,
-          lng: props.pickup?.longitude ?? DEFAULT_MAP_CENTER.longitude,
+          lat:
+            props.pickup && isInKktcServiceArea(props.pickup.latitude, props.pickup.longitude)
+              ? props.pickup.latitude
+              : DEFAULT_MAP_CENTER.latitude,
+          lng:
+            props.pickup && isInKktcServiceArea(props.pickup.latitude, props.pickup.longitude)
+              ? props.pickup.longitude
+              : DEFAULT_MAP_CENTER.longitude,
         }}
         {...(props.onMapClick
           ? { onClick: (latitude: number, longitude: number) => props.onMapClick?.({ latitude, longitude }) }

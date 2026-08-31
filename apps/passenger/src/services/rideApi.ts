@@ -30,12 +30,15 @@ export const locationApi = {
   search: (
     fetcher: Parameters<typeof apiData>[0],
     query: string,
-    near: Coordinate,
-  ) =>
-    apiData<SearchResult[]>(
-      fetcher,
-      `/locations/search?q=${encodeURIComponent(query)}&latitude=${near.latitude}&longitude=${near.longitude}`,
-    ),
+    near?: { latitude: number; longitude: number } | null,
+  ) => {
+    const params = new URLSearchParams({ q: query });
+    if (near) {
+      params.set("latitude", String(near.latitude));
+      params.set("longitude", String(near.longitude));
+    }
+    return apiData<SearchResult[]>(fetcher, `/locations/search?${params.toString()}`);
+  },
   reverse: (
     fetcher: Parameters<typeof apiData>[0],
     point: { latitude: number; longitude: number },

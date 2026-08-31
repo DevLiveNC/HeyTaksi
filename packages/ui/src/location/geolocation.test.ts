@@ -73,8 +73,8 @@ describe('deviceLocationUnchanged', () => {
   it('GPS titremesini yok sayar', () => {
     expect(
       deviceLocationUnchanged(
-        { latitude: 36.8121, longitude: 34.6415, heading: 10 },
-        { latitude: 36.81212, longitude: 34.64152, heading: 14 },
+        { latitude: 35.1856, longitude: 33.3823, heading: 10 },
+        { latitude: 35.18562, longitude: 33.38232, heading: 14 },
       ),
     ).toBe(true);
   });
@@ -82,8 +82,8 @@ describe('deviceLocationUnchanged', () => {
   it('anlamlı yer değişimini algılar', () => {
     expect(
       deviceLocationUnchanged(
-        { latitude: 36.8121, longitude: 34.6415 },
-        { latitude: 36.82, longitude: 34.65 },
+        { latitude: 35.1856, longitude: 33.3823 },
+        { latitude: 35.2, longitude: 33.4 },
       ),
     ).toBe(false);
   });
@@ -213,5 +213,17 @@ describe('locatingPickupLabel', () => {
 
   it('düzeltme geldiyse alış alanı adres gelene kadar Mevcut konum gösterir', () => {
     expect(locatingPickupLabel({ address: null, blocked: false, loading: false, hasFix: true })).toBe('Mevcut konum');
+  });
+
+  it('hizmet bölgesi dışındayken haritadan seç der', () => {
+    expect(
+      locatingPickupLabel({
+        address: null,
+        blocked: false,
+        loading: false,
+        hasFix: true,
+        outsideServiceArea: true,
+      }),
+    ).toBe('Haritadan alış noktası seç');
   });
 });

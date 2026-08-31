@@ -7,12 +7,28 @@ export {
 } from './client-endpoints.js';
 export {
   DEFAULT_MAP_CENTER,
+  KKTC_MAP_MAX_BOUNDS,
+  KKTC_MAP_MIN_ZOOM,
+  KKTC_OUTSIDE_LOCATION_MESSAGE,
+  KKTC_PLACES,
+  KKTC_SERVICE_AREA_CODE,
+  KKTC_SERVICE_AREA_MESSAGE,
+  KKTC_SERVICE_POLYGON,
   KKTC_VIEWBOX,
   MAP_LABEL_LANGUAGE,
   OSM_DARK_STYLE_URL,
   OSM_LIGHT_STYLE_URL,
+  formatKktcAddress,
+  isInKktcServiceArea,
+  kktcGoogleLatLngBounds,
+  kktcMapMaxBoundsLngLat,
+  kktcPlaceById,
+  kktcPlaceToSearchHit,
   kktcViewboxParam,
+  matchKktcPlaces,
   nearbyViewboxParam,
+  type KktcAddressInput,
+  type KktcPlace,
 } from './map-region.js';
 
 export const roles = ['passenger', 'driver', 'admin', 'dispatcher', 'support'] as const;
@@ -508,6 +524,13 @@ export interface MapsClientConfig {
   styleUrl: string | null;
   labelLanguage: string;
   defaultCenter: { latitude: number; longitude: number };
+  bounds: {
+    minLongitude: number;
+    minLatitude: number;
+    maxLongitude: number;
+    maxLatitude: number;
+  };
+  minZoom: number;
 }
 
 export interface LiveRideMarker {

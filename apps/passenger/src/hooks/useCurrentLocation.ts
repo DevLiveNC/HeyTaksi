@@ -1,27 +1,28 @@
 import { useMemo } from "react";
-import type { Coordinate } from "@heytaksi/shared";
+import { isInKktcServiceArea, type Coordinate } from "@heytaksi/shared";
 import { useDeviceLocation } from "@heytaksi/ui";
 
 /**
- * Yolcu konumu. Tarayıcı izni {@link useDeviceLocation} ile paylaşılır;
- * gerçek GPS gelene kadar sahte bir şehir merkezi döndürülmez.
+ * Yolcu konumu. Tarayıcı izni {@link useDeviceLocation} ile paylaşılır.
+ * KKTC dışındaki GPS alış noktası olarak kullanılmaz; harita Lefkoşa’da kalır.
  */
 export function useCurrentLocation() {
   const geo = useDeviceLocation();
-  const location: Coordinate | null = useMemo(
-    () =>
-      geo.location
-        ? {
-            latitude: geo.location.latitude,
-            longitude: geo.location.longitude,
-            address: "Mevcut konum",
-          }
-        : null,
-    [geo.location],
+  const inServiceArea = Boolean(
+    geo.location && isInKktcServiceArea(geo.location.latitude, geo.location.longitude),
   );
+  const location: Coordinate | null = useMemo(() => {
+    if (!geo.location || !inServiceArea) return null;
+    return {
+      latitude: geo.location.latitude,
+      longitude: geo.location.longitude,
+      address: "Mevcut konum",
+    };
+  }, [geo.location, inServiceArea]);
 
   return {
     location,
+    outsideServiceArea: geo.hasFix && !inServiceArea,
     isFallback: !geo.hasFix,
     permission: geo.permission,
     loading: geo.loading,

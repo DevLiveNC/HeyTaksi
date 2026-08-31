@@ -36,13 +36,17 @@ export function MapCanvas() {
           <strong>
             {geo.outsideServiceArea
               ? "Hizmet bölgesi dışı"
-              : geo.isFallback
-              ? "Konum izni gerekli"
-              : loading
-                ? "Sürücüler aranıyor…"
-                : drivers.length
-                  ? `${drivers.length} taksi yakınında`
-                  : "Şu anda yakında taksi yok"}
+              : geo.blocked
+                ? "Konum izni gerekli"
+                : !geo.location
+                  ? geo.loading
+                    ? "Konum alınıyor…"
+                    : "Konum alınamadı"
+                  : loading
+                    ? "Sürücüler aranıyor…"
+                    : drivers.length
+                      ? `${drivers.length} taksi yakınında`
+                      : "Şu anda yakında taksi yok"}
           </strong>
           {geo.outsideServiceArea
             ? "Haritadan alış noktası seç"

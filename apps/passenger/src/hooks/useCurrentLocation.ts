@@ -26,7 +26,9 @@ export function useCurrentLocation() {
     isFallback: !geo.hasFix,
     permission: geo.permission,
     loading: geo.loading,
+    error: geo.error,
     request: geo.request,
     blocked: geo.blocked,
+    hasFix: geo.hasFix,
   };
 }

@@ -60,7 +60,8 @@ export function HomePage() {
         <strong>
           {geo.outsideServiceArea
             ? KKTC_OUTSIDE_LOCATION_MESSAGE
-            : (geo.location?.address ?? (geo.blocked ? "Konum izni gerekli" : "Konum alınıyor…"))}
+            : (geo.location?.address ??
+              (geo.blocked ? "Konum izni gerekli" : geo.loading ? "Konum alınıyor…" : "Konum alınamadı"))}
         </strong>
       </div>
       <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}>

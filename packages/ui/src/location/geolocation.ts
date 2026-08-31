@@ -14,11 +14,20 @@ export interface DeviceLocation {
 /**
  * İlk düzeltme: kullanıcı jestinde getCurrentPosition. Cached Wi-Fi konumu
  * kabul edilir ki izin verildikten sonra dakikalarca beklenmesin.
+ * `timeout` kısa tutulur; aksi halde yüksek doğruluk GPS'siz masaüstünde
+ * alış noktası “Konum alınıyor…”da sonsuza kadar kalır.
  */
 export const GEO_FIRST_FIX_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
-  maximumAge: 30_000,
-  timeout: 15_000,
+  maximumAge: 60_000,
+  timeout: 8_000,
+};
+
+/** Yüksek doğruluk zaman aşımına uğrarsa ağ/Wi-Fi konumu. */
+export const GEO_COARSE_FIX_OPTIONS: PositionOptions = {
+  enableHighAccuracy: false,
+  maximumAge: 300_000,
+  timeout: 8_000,
 };
 
 /**
@@ -108,6 +117,54 @@ export function geoErrorMessage(
   return null;
 }
 
+function isPermissionDenied(error: { code?: number } | null | undefined): boolean {
+  return error?.code === 1;
+}
+
+/** Tarayıcının `timeout` seçeneğini yok saydığı durumlar (Safari) için üst sınır. */
+export function geoSafetyTimeoutMs(options: PositionOptions): number {
+  return Math.max(1_000, (options.timeout ?? 8_000) + 2_000);
+}
+
+export function getCurrentPositionOnce(
+  options: PositionOptions,
+  geo: Pick<Geolocation, 'getCurrentPosition'> = navigator.geolocation,
+  safetyMs = geoSafetyTimeoutMs(options),
+): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      action();
+    };
+    const timer = setTimeout(() => {
+      finish(() => reject({ code: 3, message: 'Timeout' }));
+    }, safetyMs);
+    geo.getCurrentPosition(
+      (position) => finish(() => resolve(position)),
+      (error) => finish(() => reject(error)),
+      options,
+    );
+  });
+}
+
+/**
+ * Önce yüksek doğruluk, olmazsa kaba konum. İzin reddi yedek denemeye düşmez.
+ * `watchPosition` zaman aşımı olmadan çalıştığı için ilk düzeltme buradan gelir.
+ */
+export async function acquireDeviceFix(
+  geo: Pick<Geolocation, 'getCurrentPosition'> = navigator.geolocation,
+): Promise<GeolocationPosition> {
+  try {
+    return await getCurrentPositionOnce(GEO_FIRST_FIX_OPTIONS, geo);
+  } catch (error) {
+    if (isPermissionDenied(error as { code?: number })) throw error;
+    return getCurrentPositionOnce(GEO_COARSE_FIX_OPTIONS, geo);
+  }
+}
+
 export function readDeviceLocation(position: GeolocationPosition): DeviceLocation {
   const { latitude, longitude, accuracy, heading, speed } = position.coords;
   const next: DeviceLocation = { latitude, longitude };
@@ -135,4 +192,21 @@ export function headingClose(a: number | undefined, b: number | undefined, epsil
 /** GPS titremesini state güncellemesine çevirme. */
 export function deviceLocationUnchanged(previous: DeviceLocation, next: DeviceLocation): boolean {
   return coordinatesClose(previous, next) && headingClose(previous.heading, next.heading);
+}
+
+/** Yolcu alış alanı: GPS yokken sonsuz “Konum alınıyor…” yerine net durum. */
+export function locatingPickupLabel(options: {
+  address?: string | null;
+  blocked: boolean;
+  loading: boolean;
+  hasFix: boolean;
+  failed?: boolean;
+  outsideServiceArea?: boolean;
+}): string {
+  if (options.address) return options.address;
+  if (options.outsideServiceArea) return 'Haritadan alış noktası seç';
+  if (options.blocked) return 'Konum izni gerekli';
+  if (options.hasFix) return 'Mevcut konum';
+  if (options.failed && !options.loading) return 'Alış noktasını haritadan seç';
+  return 'Konum alınıyor…';
 }

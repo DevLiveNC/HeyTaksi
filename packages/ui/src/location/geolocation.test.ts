@@ -210,4 +210,8 @@ describe('locatingPickupLabel', () => {
       'Alış noktasını haritadan seç',
     );
   });
+
+  it('düzeltme geldiyse alış alanı adres gelene kadar Mevcut konum gösterir', () => {
+    expect(locatingPickupLabel({ address: null, blocked: false, loading: false, hasFix: true })).toBe('Mevcut konum');
+  });
 });

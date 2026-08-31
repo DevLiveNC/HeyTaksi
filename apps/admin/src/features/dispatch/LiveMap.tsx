@@ -2,7 +2,7 @@ import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapInstance } from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_MAP_CENTER, type LiveDriverMarker, type LiveRideMarker } from '@heytaksi/shared';
-import { bindOsmStyleFallback, enhanceOsmMap, GoogleMapHost, osmKktcMapView, osmStyleUrl } from '@heytaksi/ui';
+import { GoogleMapHost, osmKktcMapView, osmStyleUrl, wireOsmMap } from '@heytaksi/ui';
 
 interface Props {
   drivers: LiveDriverMarker[];
@@ -106,12 +106,9 @@ export function MapLibreLiveMap({ drivers, rides, selectedRideId, selectedDriver
     mapRef.current = map;
 
     // Altlık yüklenemezse raster OSM'ye geç; katmanlar yeniden kurulur.
-    bindOsmStyleFallback(map, () => {
+    const unwire = wireOsmMap(map, () => {
       loaded.current = false;
     });
-    const enhance = () => enhanceOsmMap(map);
-    map.on('load', enhance);
-    map.on('style.load', enhance);
 
     const addLayers = () => {
       map.addSource('rides', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -206,6 +203,7 @@ export function MapLibreLiveMap({ drivers, rides, selectedRideId, selectedDriver
     });
 
     return () => {
+      unwire();
       map.remove();
       mapRef.current = null;
       loaded.current = false;

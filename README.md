@@ -79,7 +79,7 @@ Faz 3 yolcu deneyimi `apps/passenger/src/features` altında `home`, `rides`, `wa
 
 ## Konum ve yolculuk altyapısı
 
-Harita eklentisi şimdilik **OpenStreetMap** (MapLibre + OpenFreeMap Liberty) kullanır: küresel kapsama, Türkçe etiketler (`name:tr`), KKTC (Lefkoşa) varsayılan merkezi, kafe/market POI katmanları. Adres arama Nominatim, rota OSRM. Google Maps (`MAP_PROVIDER=google` + anahtar) sonra bağlanacak.
+Harita eklentisi şimdilik **OpenStreetMap** (MapLibre + OpenFreeMap Liberty) kullanır: küresel kapsama, Türkçe etiketler (`name:tr`), KKTC (Lefkoşa) varsayılan merkezi, kafe/market POI katmanları. **OSM için API anahtarı gerekmez.** Adres arama Nominatim, rota OSRM. Google Maps (`MAP_PROVIDER=google` + `VITE_MAP_PROVIDER=google` + tarayıcı anahtarı) isteğe bağlıdır.
 
 ```text
 POST /api/v1/locations/route

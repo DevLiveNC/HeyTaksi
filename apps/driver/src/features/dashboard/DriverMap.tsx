@@ -2,12 +2,11 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance } from "maplibre-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  bindOsmStyleFallback,
   createHtmlMarker,
-  enhanceOsmMap,
   GoogleMapHost,
   osmKktcMapView,
   osmStyleUrl,
+  wireOsmMap,
   type HtmlMapMarker,
 } from "@heytaksi/ui";
 import { DEFAULT_MAP_CENTER, isInKktcServiceArea, type Coordinate, type DriverRideDetail, type Hotspot, type RouteEstimate } from "@heytaksi/shared";
@@ -45,10 +44,7 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
       attributionControl: {},
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    bindOsmStyleFallback(map);
-    const enhance = () => enhanceOsmMap(map);
-    map.on("load", enhance);
-    map.on("style.load", enhance);
+    const unwire = wireOsmMap(map);
     mapRef.current = map;
     const element = document.createElement("div");
     element.className = "driver-pin";
@@ -57,6 +53,7 @@ function MapLibreDriverMap({ driverLocation, hotspots = [], ride, navigateTo, cl
       .setLngLat([driverLocation.longitude, driverLocation.latitude])
       .addTo(map);
     return () => {
+      unwire();
       map.remove();
       mapRef.current = null;
       driverMarker.current = null;

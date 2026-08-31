@@ -124,19 +124,78 @@ export function enhanceOsmMap(map: OsmMapLike): void {
   }
 }
 
+export interface OsmStyleError {
+  status?: number;
+  message?: string;
+}
+
+/**
+ * Stil JSON'u hiç yüklenmezse veya karo/worker isteği düşerse raster OSM'ye geç.
+ * MapLibre v6'da worker URL'si yoksa vektör karolar sessizce gelmez; arka plan rengi kalır.
+ */
+export function shouldFallbackOsmStyle(
+  styleLoaded: boolean,
+  error?: OsmStyleError,
+): boolean {
+  if (!styleLoaded) return true;
+  const status = error?.status;
+  if (status != null && status >= 400) return true;
+  const message = error?.message ?? '';
+  return /worker|Failed to fetch|NetworkError|AJAXError|tile/i.test(message);
+}
+
 export function bindOsmStyleFallback(
   map: {
-    on(type: string, listener: (event?: { error?: { status?: number } }) => void): void;
+    on(type: string, listener: (...args: unknown[]) => void): void;
     setStyle(style: unknown): void;
     isStyleLoaded(): boolean | void;
   },
   onFailed?: () => void,
 ): void {
   let applied = false;
-  map.on('error', () => {
-    if (applied || map.isStyleLoaded()) return;
+  const apply = () => {
+    if (applied) return;
     applied = true;
     onFailed?.();
     map.setStyle(OSM_RASTER_FALLBACK_STYLE);
+  };
+  map.on('error', (...args: unknown[]) => {
+    if (applied) return;
+    const event = args[0] as { error?: OsmStyleError } | undefined;
+    if (shouldFallbackOsmStyle(Boolean(map.isStyleLoaded()), event?.error)) apply();
   });
+}
+
+export interface OsmRuntimeMap extends OsmMapLike {
+  on(type: string, listener: (...args: unknown[]) => void): void;
+  setStyle(style: unknown): void;
+  isStyleLoaded(): boolean | void;
+  resize(): void;
+  getContainer(): HTMLElement;
+}
+
+/**
+ * OSM/MapLibre ortak yaşam döngüsü: Türkçe etiket, stil yedeklemesi, boyut yenileme.
+ */
+export function wireOsmMap(map: OsmRuntimeMap, onFailed?: () => void): () => void {
+  bindOsmStyleFallback(map, onFailed);
+  const enhance = () => enhanceOsmMap(map);
+  map.on('load', enhance);
+  map.on('style.load', enhance);
+  const resize = () => {
+    try {
+      map.resize();
+    } catch {
+      /* harita kaldırılmış olabilir */
+    }
+  };
+  map.on('load', resize);
+  const container = map.getContainer();
+  const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+  observer?.observe(container);
+  const later = typeof window === 'undefined' ? [] : [50, 250, 800].map((ms) => window.setTimeout(resize, ms));
+  return () => {
+    observer?.disconnect();
+    for (const id of later) window.clearTimeout(id);
+  };
 }

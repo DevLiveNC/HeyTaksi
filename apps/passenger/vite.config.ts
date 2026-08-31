@@ -6,6 +6,7 @@ process.env.VITE_MAP_STYLE_URL ??= 'https://tiles.openfreemap.org/styles/liberty
 
 export default defineConfig({
   plugins: [react()],
+  worker: { format: 'es' },
   server: {
     host: '0.0.0.0',
     allowedHosts: true,

@@ -30,6 +30,7 @@ export {
   DEFAULT_MAP_CENTER,
   coordinatesClose,
   geolocationSupported,
+  locatingPickupLabel,
   locationPermissionBlocked,
   queryGeoPermission,
   type DeviceLocation,

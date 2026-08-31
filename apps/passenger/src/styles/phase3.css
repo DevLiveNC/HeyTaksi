@@ -1725,6 +1725,9 @@ input:focus-visible {
   padding: 4px 0;
   outline: 0;
 }
+.location-fields input[readonly] {
+  cursor: pointer;
+}
 .location-fields button {
   border: 0;
   background: #f2f1eb;

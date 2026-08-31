@@ -34,8 +34,12 @@ export function MapCanvas() {
         <Navigation size={13} />
         <span>
           <strong>
-            {geo.isFallback
+            {geo.blocked
               ? "Konum izni gerekli"
+              : !geo.location
+                ? geo.loading
+                  ? "Konum alınıyor…"
+                  : "Konum alınamadı"
               : loading
                 ? "Sürücüler aranıyor…"
                 : drivers.length

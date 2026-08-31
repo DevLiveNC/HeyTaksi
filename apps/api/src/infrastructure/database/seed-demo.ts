@@ -2,6 +2,7 @@ import 'dotenv/config';
 import argon2 from 'argon2';
 import pg from 'pg';
 import { z } from 'zod';
+import { kktcPlaceById } from '@heytaksi/shared';
 import { env } from '../../config/env.js';
 
 /** Faz 5 demo verisi: doğrulanmış sürücü, yolcu ve kazanç/yoğunluk ekranlarını besleyen geçmiş yolculuklar. */
@@ -26,24 +27,31 @@ interface SeedRide {
   stars: number;
 }
 
+const asPoint = (id: string): [number, number, string] => {
+  const place = kktcPlaceById(id);
+  if (!place) throw new Error(`KKTC katalogunda ${id} yok`);
+  return [place.latitude, place.longitude, place.address];
+};
+
 const routes: Array<[string, string]> = [
-  ['Dereboyu, Lefkoşa', 'Lefkoşa Devlet Hastanesi'],
-  ['Gönyeli', 'Yakın Doğu Üniversitesi'],
-  ['Girne Limanı', 'Bellapais Manastırı'],
-  ['Gazimağusa Suriçi', 'Salamis Harabeleri'],
-  ['Bandabuliya, Lefkoşa', 'Kaymaklı'],
+  ['dereboyu', 'lefkosa-hastane'],
+  ['gonyeli', 'ydu'],
+  ['girne-limani', 'bellapais'],
+  ['gazimagusa-surici', 'salamis'],
+  ['bandabuliya', 'kaymakli'],
 ];
 
-const point = (base: number, index: number) => Math.round((base + (index % 3) * 0.01) * 1e6) / 1e6;
 const rideSeeds: SeedRide[] = [];
 for (let index = 0; index < 16; index += 1) {
-  const [pickupName, destinationName] = routes[index % routes.length]!;
+  const [pickupId, destinationId] = routes[index % routes.length]!;
+  const pickup = asPoint(pickupId);
+  const destination = asPoint(destinationId);
   const distanceKm = 3 + (index % 5) * 2.4;
   const durationMinutes = Math.round(8 + distanceKm * 2.2);
   rideSeeds.push({
     hoursAgo: index < 4 ? 3 - index * 0.7 : 20 + index * 17,
-    pickup: [point(35.1856, index), point(33.3823, index + 1), pickupName],
-    destination: [point(35.175, index + 2), point(33.361, index), destinationName],
+    pickup,
+    destination,
     distanceKm,
     durationMinutes,
     fare: Math.round((45 + distanceKm * 18 + durationMinutes * 1.2) * (1 + (index % 3) * 0.1)),
@@ -85,7 +93,7 @@ try {
   const driverId = driverRow.rows[0]!.id;
   await client.query(
     `INSERT INTO vehicles(driver_id,plate,brand,model,year,color,vehicle_type,status)
-     VALUES($1,'33HT3400','Toyota','Corolla',2023,'Beyaz','standard','active')
+     VALUES($1,'HT400','Toyota','Corolla',2023,'Beyaz','standard','active')
      ON CONFLICT(plate) DO UPDATE SET driver_id=EXCLUDED.driver_id,status='active',updated_at=NOW()`,
     [driverId],
   );

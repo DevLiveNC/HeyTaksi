@@ -34,7 +34,9 @@ export function MapCanvas() {
         <Navigation size={13} />
         <span>
           <strong>
-            {geo.isFallback
+            {geo.outsideServiceArea
+              ? "Hizmet bölgesi dışı"
+              : geo.isFallback
               ? "Konum izni gerekli"
               : loading
                 ? "Sürücüler aranıyor…"
@@ -42,7 +44,9 @@ export function MapCanvas() {
                   ? `${drivers.length} taksi yakınında`
                   : "Şu anda yakında taksi yok"}
           </strong>
-          {geo.loading
+          {geo.outsideServiceArea
+            ? "Haritadan alış noktası seç"
+            : geo.loading
             ? "Konum bulunuyor…"
             : closestEtaSeconds != null
               ? `En yakını ${Math.max(1, Math.round(closestEtaSeconds / 60))} dk uzaklıkta`

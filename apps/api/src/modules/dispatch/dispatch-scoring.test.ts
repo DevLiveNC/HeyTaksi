@@ -127,17 +127,17 @@ describe('aday sıralaması', () => {
 
 describe('mesafe ve ETA', () => {
   it('haversine bilinen mesafeyi doğru hesaplar', () => {
-    // Mersin merkez → Mezitli ≈ 6.3 km kuş uçuşu.
+    // Lefkoşa → Girne ≈ 18 km kuş uçuşu.
     const meters = haversineMeters(
-      { latitude: 36.8121, longitude: 34.6415 },
-      { latitude: 36.7709, longitude: 34.5915 },
+      { latitude: 35.1856, longitude: 33.3823 },
+      { latitude: 35.3417, longitude: 33.3192 },
     );
-    expect(meters).toBeGreaterThan(6_000);
-    expect(meters).toBeLessThan(6_800);
+    expect(meters).toBeGreaterThan(16_000);
+    expect(meters).toBeLessThan(21_000);
   });
 
   it('aynı nokta için mesafe sıfırdır', () => {
-    expect(haversineMeters({ latitude: 36.8, longitude: 34.6 }, { latitude: 36.8, longitude: 34.6 })).toBe(0);
+    expect(haversineMeters({ latitude: 35.1856, longitude: 33.3823 }, { latitude: 35.1856, longitude: 33.3823 })).toBe(0);
   });
 
   it('ETA mesafeyle birlikte artar ve en az 60 saniyedir', () => {
@@ -163,8 +163,8 @@ describe('dağıtım parametreleri', () => {
   it('sürücü sonradan çevrim içi olunca en geniş yarıçaptaki açık aramalar taranır', () => {
     const maxRadius = DISPATCH_RADIUS_STEPS_METERS[DISPATCH_RADIUS_STEPS_METERS.length - 1]!;
     expect(maxRadius).toBe(12_000);
-    const pickup = { latitude: 36.8121, longitude: 34.6415 };
-    const nearby = { latitude: 36.82, longitude: 34.65 };
+    const pickup = { latitude: 35.1856, longitude: 33.3823 };
+    const nearby = { latitude: 35.2131, longitude: 33.3056 };
     const far = { latitude: 41.0082, longitude: 28.9784 };
     expect(haversineMeters(pickup, nearby)).toBeLessThan(maxRadius);
     expect(haversineMeters(pickup, far)).toBeGreaterThan(maxRadius);

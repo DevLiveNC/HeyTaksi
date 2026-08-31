@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { enhanceOsmMap, preferredMapProvider, type OsmMapLike } from './osm';
+import { enhanceOsmMap, preferredMapProvider, osmKktcMapView, type OsmMapLike } from './osm';
+
+describe('osmKktcMapView', () => {
+  it('KKTC maxBounds ve minZoom verir', () => {
+    const view = osmKktcMapView();
+    expect(view.minZoom).toBe(8);
+    expect(view.maxBounds[0][0]).toBeLessThan(view.maxBounds[1][0]);
+    expect(view.center).toEqual([33.3823, 35.1856]);
+  });
+});
 
 describe('preferredMapProvider', () => {
   it('Google anahtarı olsa bile varsayılan OSM kullanır', () => {

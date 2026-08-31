@@ -20,11 +20,11 @@ type Action =
   | { type: "save-address"; address: Address }
   | { type: "hydrate-addresses"; addresses: Address[] };
 
-const STORAGE_KEY = "heytaksi.passenger.addresses";
+const STORAGE_KEY = "heytaksi.passenger.addresses.v2";
 const defaultAddresses: Address[] = [
-  { id: "home", label: "Ev", address: "50. Yıl Mah., Yenişehir", type: "home" },
-  { id: "work", label: "İş", address: "Çiftlikköy, Üniversite Cd.", type: "work" },
-  { id: "fav-1", label: "Marina", address: "Adnan Menderes Bulvarı", type: "favorite" },
+  { id: "home", label: "Ev", address: "Dereboyu, Mehmet Akif Caddesi, Lefkoşa, KKTC", type: "home" },
+  { id: "work", label: "İş", address: "Yakın Doğu Üniversitesi, Lefkoşa, KKTC", type: "work" },
+  { id: "fav-1", label: "Girne Limanı", address: "Girne Limanı, Girne, KKTC", type: "favorite" },
 ];
 
 function loadAddresses(): Address[] {

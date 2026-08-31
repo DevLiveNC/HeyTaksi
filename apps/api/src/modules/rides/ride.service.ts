@@ -8,6 +8,11 @@ import type {
   RideStatus,
   VehicleType,
 } from "@heytaksi/shared";
+import {
+  isInKktcServiceArea,
+  KKTC_SERVICE_AREA_CODE,
+  KKTC_SERVICE_AREA_MESSAGE,
+} from "@heytaksi/shared";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../core/errors/app-error.js";
 /** Atanmış ama ilerlemeyen yolculuk için güvenlik ağı (saniye); teklif zaman aşımı dispatch motorundadır. */
@@ -56,6 +61,12 @@ export class RideService {
     this.payments = new PaymentService(app.db);
   }
   async create(passengerId: string, input: CreateRideInput) {
+    if (
+      !isInKktcServiceArea(input.pickup.latitude, input.pickup.longitude) ||
+      !isInKktcServiceArea(input.destination.latitude, input.destination.longitude)
+    ) {
+      throw new AppError(422, KKTC_SERVICE_AREA_CODE, KKTC_SERVICE_AREA_MESSAGE);
+    }
     const route = await this.maps.route(input.pickup, input.destination);
     const multiplier = multipliers[input.vehicleType];
     const base = 45,

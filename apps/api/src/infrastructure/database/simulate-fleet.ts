@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { DEFAULT_MAP_CENTER, DRIVER_LOCATION_INTERVAL_SECONDS } from '@heytaksi/shared';
+import { DRIVER_LOCATION_INTERVAL_SECONDS, kktcPlaceById } from '@heytaksi/shared';
 import { env } from '../../config/env.js';
 
 /**
@@ -11,11 +11,23 @@ import { env } from '../../config/env.js';
  * canlı haritası ve dispatch motoru gerçek trafik altında gözlemlenebilir.
  * Production'da çalıştırılmamalıdır.
  */
-const drivers = ['ayse', 'mehmet', 'zeynep', 'hasan', 'elif', 'burak', 'canan', 'okan'];
+const drivers = ['ayse', 'mehmet', 'zeynep', 'hasan', 'elif', 'burak', 'canan', 'okan'] as const;
 const password = process.env.DEMO_FLEET_PASSWORD ?? 'FleetDemo2026!';
-const centre = {
-  latitude: Number(process.env.DEMO_FLEET_CENTER_LAT ?? DEFAULT_MAP_CENTER.latitude),
-  longitude: Number(process.env.DEMO_FLEET_CENTER_LON ?? DEFAULT_MAP_CENTER.longitude),
+const driverPlaces: Record<(typeof drivers)[number], string> = {
+  ayse: 'lefkosa',
+  mehmet: 'girne',
+  zeynep: 'gazimagusa',
+  hasan: 'guzelyurt',
+  elif: 'ercan',
+  burak: 'gonyeli',
+  canan: 'iskele',
+  okan: 'lefke',
+};
+const placeOf = (slug: string) => {
+  const id = driverPlaces[slug as (typeof drivers)[number]] ?? 'lefkosa';
+  const place = kktcPlaceById(id);
+  if (!place) throw new Error(`KKTC katalogunda ${id} yok`);
+  return place;
 };
 const apiUrl = process.env.SIMULATOR_API_URL ?? `http://127.0.0.1:${env.PORT}${env.API_PREFIX}`;
 const wsUrl = process.env.SIMULATOR_WS_URL ?? `ws://127.0.0.1:${env.PORT}/ws`;
@@ -96,12 +108,13 @@ async function connect(slug: string, token: string, index: number): Promise<Agen
     }, 2_000);
   });
   const angle = (index / drivers.length) * Math.PI * 2;
+  const home = placeOf(slug);
   return {
     slug,
     token,
     socket,
-    latitude: centre.latitude + Math.sin(angle) * 0.012,
-    longitude: centre.longitude + Math.cos(angle) * 0.012,
+    latitude: home.latitude + Math.sin(angle) * 0.004,
+    longitude: home.longitude + Math.cos(angle) * 0.004,
     heading: Math.round((angle * 180) / Math.PI),
   };
 }
@@ -193,14 +206,15 @@ const stop = () => {
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
-// Deterministik dolaşım: her sürücü merkez etrafında sabit bir yörüngede ilerler.
+// Deterministik dolaşım: her sürücü kendi KKTC şehri etrafında ilerler.
 for (;;) {
   tick += 1;
   for (const [index, agent] of agents.entries()) {
+    const home = placeOf(agent.slug);
     const angle = ((index / agents.length) * Math.PI * 2 + tick * 0.06) % (Math.PI * 2);
-    const radius = 0.008 + (index % 4) * 0.004;
-    agent.latitude = centre.latitude + Math.sin(angle) * radius;
-    agent.longitude = centre.longitude + Math.cos(angle) * radius;
+    const radius = 0.003 + (index % 4) * 0.0015;
+    agent.latitude = home.latitude + Math.sin(angle) * radius;
+    agent.longitude = home.longitude + Math.cos(angle) * radius;
     agent.heading = Math.round(((angle * 180) / Math.PI + 90) % 360);
     if (agent.socket.readyState === agent.socket.OPEN)
       agent.socket.send(

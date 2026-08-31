@@ -11,7 +11,12 @@ import {
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { coordinatesClose, useAuth } from "@heytaksi/ui";
-import type { Coordinate } from "@heytaksi/shared";
+import {
+  KKTC_OUTSIDE_LOCATION_MESSAGE,
+  kktcPlaceToSearchHit,
+  matchKktcPlaces,
+  type Coordinate,
+} from "@heytaksi/shared";
 import { InteractiveMap } from "../booking/InteractiveMap";
 import { useBooking } from "../booking/BookingContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
@@ -43,19 +48,17 @@ export function DestinationSearchPage() {
     }
   }, [geo.location?.latitude, geo.location?.longitude]);
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults(matchKktcPlaces(trimmed).map(kktcPlaceToSearchHit));
       return;
     }
-    const near = booking.pickup ?? geo.location;
-    if (!near) {
-      setResults([]);
-      return;
-    }
+    const near = booking.pickup ?? geo.location ?? undefined;
     const timer = setTimeout(() => {
       setLoading(true);
+      setError("");
       locationApi
-        .search(auth.authorizedFetch, query, near)
+        .search(auth.authorizedFetch, trimmed, near)
         .then(setResults)
         .catch((cause) =>
           setError(cause instanceof Error ? cause.message : "Adres aranamadı"),
@@ -71,12 +74,14 @@ export function DestinationSearchPage() {
     setPinMode(false);
   };
   const mapClick = async (point: { latitude: number; longitude: number }) => {
-    if (!pinMode) return;
+    const pickingPickup = !booking.pickup;
+    if (!pickingPickup && !pinMode) return;
     setLoading(true);
+    setError("");
     try {
-      await selectDestination(
-        await locationApi.reverse(auth.authorizedFetch, point),
-      );
+      const resolved = await locationApi.reverse(auth.authorizedFetch, point);
+      if (pickingPickup) booking.setPickup(resolved);
+      else await selectDestination(resolved);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Konum bulunamadı");
     } finally {
@@ -123,7 +128,10 @@ export function DestinationSearchPage() {
           <label>
             <span>ALIŞ NOKTASI</span>
             <input
-              value={booking.pickup?.address ?? "Konum alınıyor…"}
+              value={
+                booking.pickup?.address ??
+                (geo.outsideServiceArea || geo.blocked ? "Haritadan alış noktası seç" : "Konum alınıyor…")
+              }
               readOnly
             />
           </label>
@@ -148,12 +156,21 @@ export function DestinationSearchPage() {
             <MapPin />
           </button>
         </div>
+        {geo.outsideServiceArea && (
+          <p className="permission-warning">{KKTC_OUTSIDE_LOCATION_MESSAGE}</p>
+        )}
         {geo.blocked && (
           <p className="permission-warning">
             Konum izni kapalı. Yakındaki taksileri ve doğru alış noktasını kullanmak için konuma izin vermen gerekir.
           </p>
         )}
-        {pinMode && (
+        {!booking.pickup && (
+          <div className="pin-hint">
+            <Navigation />
+            Haritada alış noktasına dokun
+          </div>
+        )}
+        {pinMode && booking.pickup && (
           <div className="pin-hint">
             <Navigation />
             Haritada istediğin noktaya dokun

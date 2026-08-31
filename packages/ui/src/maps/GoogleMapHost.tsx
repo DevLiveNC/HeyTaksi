@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { KKTC_MAP_MIN_ZOOM, kktcGoogleLatLngBounds } from '@heytaksi/shared';
 import { googleMapsBrowserKey, isGoogleMapsConfigured, loadGoogleMaps, setGoogleMapsBrowserKey } from './loader';
 import { preferredMapProvider } from './osm';
 import { GOOGLE_MAP_DARK_STYLES, GOOGLE_MAP_LIGHT_STYLES } from './styles';
@@ -94,6 +95,8 @@ export function GoogleMapHost({
       const map = new g.maps.Map(container.current, {
         center,
         zoom,
+        minZoom: KKTC_MAP_MIN_ZOOM,
+        restriction: { latLngBounds: kktcGoogleLatLngBounds(), strictBounds: false },
         disableDefaultUI: true,
         zoomControl: true,
         gestureHandling: 'greedy',

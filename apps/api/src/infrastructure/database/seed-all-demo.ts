@@ -201,10 +201,7 @@ try {
       const driverRow = await client.query<{ id: string }>('SELECT id FROM drivers WHERE user_id=$1', [userId]);
       const driverId = driverRow.rows[0]!.id;
 
-      // Demo araç - plaka benzersiz olmalı, driver'a göre
-      const plate = acc.role === 'driver' ? `34DEMO${accounts.indexOf(acc) + 1}` : `34DEMO${userId.slice(0, 2).toUpperCase()}`;
-      // Daha deterministik plaka: driver.demo için 34DMO001
-      const demoPlate = '34DMO001';
+      const demoPlate = 'HT001';
       await client.query(
         `INSERT INTO vehicles(driver_id, plate, brand, model, year, color, vehicle_type, status)
          VALUES($1, $2, 'Toyota', 'Corolla', 2023, 'Beyaz', 'standard', 'active')

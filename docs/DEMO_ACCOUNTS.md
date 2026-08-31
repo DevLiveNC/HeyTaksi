@@ -19,7 +19,7 @@ Komut idempotent'tir - aynı e-posta varsa şifreyi günceller, yoksa oluşturur
 | # | Rol | E-posta | Şifre | Telefon | Ad Soyad | Açıklama |
 |---|-----|---------|-------|---------|----------|----------|
 | 1 | **passenger** | `passenger.demo@heytaksi.com` | `PassengerDemo2026!` | +905551110001 | Demo Yolcu | Yolcu uygulaması - yolculuk talep etme, cüzdan, profil |
-| 2 | **driver** | `driver.demo@heytaksi.com` | `DriverDemo2026!` | +905331110002 | Demo Sürücü | Sürücü uygulaması - teklif kabul, navigasyon, kazanç. Araç: 34DMO001 Toyota Corolla 2023 Beyaz |
+| 2 | **driver** | `driver.demo@heytaksi.com` | `DriverDemo2026!` | +905331110002 | Demo Sürücü | Sürücü uygulaması - teklif kabul, navigasyon, kazanç. Araç: HT001 Toyota Corolla 2023 Beyaz |
 | 3 | **admin** | `admin.demo@heytaksi.com` | `AdminDemo2026!` | +905551110003 | Demo Admin | Tam yetkili yönetici - tüm yönetim paneli erişimi, super_admin |
 | 4 | **dispatcher** | `dispatcher.demo@heytaksi.com` | `DispatcherDemo2026!` | +905551110004 | Demo Dispatcher | Operasyon görevlisi - dispatch yönetimi, admin paneli erişimi |
 | 5 | **support** | `support.demo@heytaksi.com` | `SupportDemo2026!` | +905551110005 | Demo Support | Destek görevlisi - destek kayıtları yönetimi |

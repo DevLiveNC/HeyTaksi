@@ -112,6 +112,6 @@ export function useDriverLocation(
     hasFix: geo.hasFix,
     blocked: geo.blocked,
     loading: geo.loading,
-    request: geo.request,
+    request: async () => Boolean(await geo.request()),
   };
 }

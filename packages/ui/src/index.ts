@@ -39,6 +39,14 @@ export {
   type DeviceLocation,
   type GeoPermission,
 } from './location/geolocation';
+export {
+  LIVE_PICKUP_ADDRESS,
+  isLivePickup,
+  mapClickTarget,
+  pinModeAfterAdoptingPickup,
+  shouldAdoptDevicePickup,
+  type MapPinMode,
+} from './location/pickup-flow';
 export { DeviceLocationProvider, useDeviceLocation } from './location/DeviceLocationContext';
 export { LocationPermissionGate } from './location/LocationPermissionGate';
 export { LocationPermissionToggle } from './location/LocationPermissionToggle';

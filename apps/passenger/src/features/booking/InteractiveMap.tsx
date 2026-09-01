@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createHtmlMarker,
   DEFAULT_MAP_CENTER,
+  ErrorBoundary,
   GoogleMapHost,
   osmKktcMapView,
   osmStyleUrl,
@@ -37,6 +38,15 @@ interface Props {
 interface GoogleHandle {
   map: google.maps.Map;
   maps: typeof google.maps;
+}
+
+function safeRemoveMap(map: MapInstance | null) {
+  if (!map) return;
+  try {
+    map.remove();
+  } catch {
+    /* MapLibre stil yüklenmeden unmount: projection/patternAtlas henüz yok */
+  }
 }
 
 function upsertMapLibreMarker(
@@ -106,15 +116,12 @@ function MapLibreInteractiveMap({
     mapRef.current = map;
     return () => {
       unwire();
-      pickupMarker.current?.remove();
-      destinationMarker.current?.remove();
-      driverMarker.current?.remove();
       pickupMarker.current = null;
       destinationMarker.current = null;
       driverMarker.current = null;
-      map.remove();
-      mapRef.current = null;
       nearbyMarkers.current.clear();
+      mapRef.current = null;
+      safeRemoveMap(map);
     };
     // İlk merkez yalnızca kurulumda; GPS sonradan easeTo ile gelir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,6 +130,7 @@ function MapLibreInteractiveMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    try {
     const seen = new Set<string>();
     for (const driver of nearbyDrivers ?? []) {
       seen.add(driver.id);
@@ -147,12 +155,17 @@ function MapLibreInteractiveMap({
         marker.remove();
         nearbyMarkers.current.delete(id);
       }
+    } catch {
+      /* harita kalkmış */
+    }
   }, [nearbyDrivers]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const update = () => {
+      if (mapRef.current !== map) return;
+      try {
       pickupMarker.current = upsertMapLibreMarker(map, pickupMarker.current, pickup, "pickup", "Alış noktası");
       destinationMarker.current = upsertMapLibreMarker(
         map,
@@ -205,11 +218,18 @@ function MapLibreInteractiveMap({
       ) {
         map.easeTo({ center: [pickup.longitude, pickup.latitude], duration: forceRecenter ? 250 : 400 });
       }
+      } catch {
+        /* harita unmount sırasında stil henüz hazır olmayabilir */
+      }
     };
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
     return () => {
-      map.off("load", update);
+      try {
+        map.off("load", update);
+      } catch {
+        /* harita kalkmış */
+      }
     };
   }, [pickup, destination, route, driverLocation, recenterToken]);
 
@@ -359,6 +379,7 @@ export function InteractiveMap(props: Props) {
   }, []);
   const className = props.className ?? "live-map";
   return (
+    <ErrorBoundary fallback={<div className={className} aria-label="Harita yüklenemedi" />}>
     <div className={`${className}-wrap`} style={{ position: "relative", minHeight: 160, height: "100%" }}>
       <GoogleMapHost
         className={className}
@@ -381,5 +402,6 @@ export function InteractiveMap(props: Props) {
       />
       {engine ? <GoogleInteractiveMap {...props} google={engine} /> : null}
     </div>
+    </ErrorBoundary>
   );
 }

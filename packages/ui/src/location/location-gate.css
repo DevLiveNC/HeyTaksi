@@ -111,3 +111,14 @@
   outline: 3px solid #ffcf2055;
   outline-offset: 2px;
 }
+.ht-location-skip {
+  width: 100%;
+  margin-top: 8px !important;
+  background: transparent !important;
+  color: #171813 !important;
+  box-shadow: inset 0 0 0 1px #e4e2d8;
+}
+.ht-location-gate[data-theme='dark'] .ht-location-skip {
+  color: #f4f4f1 !important;
+  box-shadow: inset 0 0 0 1px #2c2f35;
+}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import './location-gate.css';
 import { useDeviceLocation } from './DeviceLocationContext';
 
@@ -5,7 +6,7 @@ const copy = {
   passenger: {
     kicker: 'YOLCU',
     title: 'Konum izni gerekli',
-    body: 'Yakındaki taksileri göstermek ve alış noktanı doğru belirlemek için konumuna ihtiyacımız var. İzin vermeden yolculuk başlatılamaz.',
+    body: 'Yakındaki taksileri göstermek ve alış noktanı otomatik doldurmak için konumuna ihtiyacımız var. İzin vermezsen alış noktasını haritadan da seçebilirsin.',
   },
   driver: {
     kicker: 'SÜRÜCÜ',
@@ -29,8 +30,10 @@ function PinIcon() {
 
 export function LocationPermissionGate({ audience }: { audience: 'passenger' | 'driver' }) {
   const { blocked, permission, loading, error, hasFix, request } = useDeviceLocation();
+  const [skipped, setSkipped] = useState(false);
   // Elde düzeltme varken overlay açılmaz; aksi halde tıklama (yolcu isteği) yutulur.
-  if (!blocked || hasFix) return null;
+  // Yolcu haritadan pin seçmek için kapıyı geçebilir; sürücü konum olmadan çevrim içi olamaz.
+  if (!blocked || hasFix || (audience === 'passenger' && skipped)) return null;
   const text = copy[audience];
   const denied = permission === 'denied';
   const unsupported = permission === 'unsupported';
@@ -59,6 +62,11 @@ export function LocationPermissionGate({ audience }: { audience: 'passenger' | '
         <button type="button" disabled={(loading && !denied) || unsupported} onClick={() => void request()}>
           {denied ? 'İzni tekrar dene' : loading ? 'Konum isteniyor…' : 'Konuma izin ver'}
         </button>
+        {audience === 'passenger' && (
+          <button type="button" className="ht-location-skip" onClick={() => setSkipped(true)}>
+            Haritadan alış noktası seç
+          </button>
+        )}
       </section>
     </div>
   );

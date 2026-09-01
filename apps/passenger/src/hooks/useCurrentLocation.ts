@@ -1,6 +1,15 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { isInKktcServiceArea, type Coordinate } from "@heytaksi/shared";
-import { useDeviceLocation } from "@heytaksi/ui";
+import { LIVE_PICKUP_ADDRESS, useDeviceLocation } from "@heytaksi/ui";
+
+function toPickup(point: { latitude: number; longitude: number }): Coordinate | null {
+  if (!isInKktcServiceArea(point.latitude, point.longitude)) return null;
+  return {
+    latitude: point.latitude,
+    longitude: point.longitude,
+    address: LIVE_PICKUP_ADDRESS,
+  };
+}
 
 /**
  * Yolcu konumu. Tarayıcı izni {@link useDeviceLocation} ile paylaşılır.
@@ -13,12 +22,16 @@ export function useCurrentLocation() {
   );
   const location: Coordinate | null = useMemo(() => {
     if (!geo.location || !inServiceArea) return null;
-    return {
-      latitude: geo.location.latitude,
-      longitude: geo.location.longitude,
-      address: "Mevcut konum",
-    };
+    return toPickup(geo.location);
   }, [geo.location, inServiceArea]);
+  const locationRef = useRef(location);
+  locationRef.current = location;
+
+  const requestPickup = useCallback(async (): Promise<Coordinate | null> => {
+    const fix = await geo.request();
+    if (fix) return toPickup(fix);
+    return locationRef.current;
+  }, [geo]);
 
   return {
     location,
@@ -28,6 +41,7 @@ export function useCurrentLocation() {
     loading: geo.loading,
     error: geo.error,
     request: geo.request,
+    requestPickup,
     blocked: geo.blocked,
     hasFix: geo.hasFix,
   };

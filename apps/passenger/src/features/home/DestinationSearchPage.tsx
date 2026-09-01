@@ -8,9 +8,18 @@ import {
   Search,
   Star,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { coordinatesClose, locatingPickupLabel, useAuth } from "@heytaksi/ui";
+import {
+  coordinatesClose,
+  isLivePickup,
+  locatingPickupLabel,
+  mapClickTarget,
+  pinModeAfterAdoptingPickup,
+  shouldAdoptDevicePickup,
+  useAuth,
+  type MapPinMode,
+} from "@heytaksi/ui";
 import {
   KKTC_OUTSIDE_LOCATION_MESSAGE,
   isInKktcServiceArea,
@@ -24,8 +33,6 @@ import { useCurrentLocation } from "../../hooks/useCurrentLocation";
 import { locationApi, type SearchResult } from "../../services/rideApi";
 import { usePassengerExperience } from "../../state/PassengerExperience";
 
-type PinMode = "pickup" | "destination" | null;
-
 export function DestinationSearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,41 +42,43 @@ export function DestinationSearchPage() {
   const geo = useCurrentLocation();
   const [query, setQuery] = useState((location.state as { destination?: string } | null)?.destination ?? "");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [pinMode, setPinMode] = useState<PinMode>("pickup");
-  const [loading, setLoading] = useState(false);
+  const [pinMode, setPinMode] = useState<MapPinMode>("destination");
+  const [searching, setSearching] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [routing, setRouting] = useState(false);
   const [error, setError] = useState("");
+  const [recenterToken, setRecenterToken] = useState(0);
+  const adoptLive = useRef(false);
+  const setPickup = booking.setPickup;
+  const setDestination = booking.setDestination;
+
   useEffect(() => {
+    if (!shouldAdoptDevicePickup(booking.pickup, geo.location, adoptLive.current)) return;
     if (!geo.location) return;
-    const current = booking.pickup;
-    // Kullanıcının seçtiği alış noktasını GPS titremesiyle ezme; yalnızca boşsa veya
-    // hâlâ "canlı konum" ise ve anlamlı yer değiştiyse güncelle.
-    if (!current) {
-      booking.setPickup(geo.location);
-      setPinMode((mode) => (mode === "pickup" ? null : mode));
-      return;
-    }
-    if (current.address === "Mevcut konum" && !coordinatesClose(current, geo.location, 0.0004)) {
-      booking.setPickup(geo.location);
-    }
-  }, [geo.location?.latitude, geo.location?.longitude]);
+    adoptLive.current = false;
+    setPickup(geo.location);
+    setPinMode(pinModeAfterAdoptingPickup());
+  }, [geo.location, booking.pickup, setPickup]);
+
   useEffect(() => {
     const pickup = booking.pickup;
-    if (!pickup || pickup.address !== "Mevcut konum") return;
+    if (!isLivePickup(pickup)) return;
     let alive = true;
     locationApi
       .reverse(auth.authorizedFetch, pickup)
       .then((resolved) => {
         if (!alive) return;
         const current = booking.pickup;
-        if (!current || current.address !== "Mevcut konum") return;
+        if (!isLivePickup(current)) return;
         if (!coordinatesClose(current, resolved, 0.0004)) return;
-        booking.setPickup(resolved);
+        setPickup(resolved);
       })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [auth.authorizedFetch, booking.pickup?.latitude, booking.pickup?.longitude, booking.pickup?.address]);
+  }, [auth.authorizedFetch, booking.pickup, setPickup]);
+
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < 2) {
@@ -78,7 +87,7 @@ export function DestinationSearchPage() {
     }
     const near = booking.pickup ?? geo.location ?? undefined;
     const timer = setTimeout(() => {
-      setLoading(true);
+      setSearching(true);
       setError("");
       locationApi
         .search(auth.authorizedFetch, trimmed, near)
@@ -86,28 +95,31 @@ export function DestinationSearchPage() {
         .catch((cause) =>
           setError(cause instanceof Error ? cause.message : "Adres aranamadı"),
         )
-        .finally(() => setLoading(false));
+        .finally(() => setSearching(false));
     }, 450);
     return () => clearTimeout(timer);
-  }, [query]);
-  const selectDestination = async (point: Coordinate) => {
-    booking.setDestination(point);
+  }, [query, auth.authorizedFetch, booking.pickup?.latitude, booking.pickup?.longitude, geo.location?.latitude, geo.location?.longitude]);
+
+  const selectDestination = (point: Coordinate) => {
+    setDestination(point);
     setQuery(point.address);
     setResults([]);
-    setPinMode(null);
+    setPinMode("destination");
   };
+
   const applyMapPoint = (resolved: Coordinate, pickingPickup: boolean) => {
     if (pickingPickup) {
-      booking.setPickup(resolved);
-      setPinMode(booking.destination ? null : "destination");
+      adoptLive.current = false;
+      setPickup(resolved);
+      setPinMode(pinModeAfterAdoptingPickup());
     } else {
-      void selectDestination(resolved);
+      selectDestination(resolved);
     }
   };
+
   const mapClick = async (point: { latitude: number; longitude: number }) => {
-    const pickingPickup = !booking.pickup || pinMode === "pickup";
-    if (!pickingPickup && pinMode !== "destination") return;
-    setLoading(true);
+    const target = mapClickTarget(pinMode, Boolean(booking.pickup));
+    setResolving(true);
     setError("");
     const fallback: Coordinate = {
       latitude: point.latitude,
@@ -115,19 +127,30 @@ export function DestinationSearchPage() {
       address: `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`,
     };
     try {
-      applyMapPoint(await locationApi.reverse(auth.authorizedFetch, point), pickingPickup);
+      applyMapPoint(await locationApi.reverse(auth.authorizedFetch, point), target === "pickup");
     } catch (cause) {
       if (isInKktcServiceArea(point.latitude, point.longitude)) {
-        applyMapPoint(fallback, pickingPickup);
+        applyMapPoint(fallback, target === "pickup");
       }
       setError(cause instanceof Error ? cause.message : "Konum bulunamadı");
     } finally {
-      setLoading(false);
+      setResolving(false);
     }
   };
+
+  const useCurrentAsPickup = async () => {
+    adoptLive.current = true;
+    const point = (await geo.requestPickup()) ?? geo.location;
+    if (!point) return;
+    adoptLive.current = false;
+    setPickup(point);
+    setPinMode(pinModeAfterAdoptingPickup());
+    setRecenterToken((value) => value + 1);
+  };
+
   const continueRoute = async () => {
     if (!booking.pickup || !booking.destination) return;
-    setLoading(true);
+    setRouting(true);
     setError("");
     try {
       booking.setRoute(
@@ -141,9 +164,11 @@ export function DestinationSearchPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Rota oluşturulamadı");
     } finally {
-      setLoading(false);
+      setRouting(false);
     }
   };
+
+  const busy = searching || resolving || routing;
   const pickupLabel = locatingPickupLabel({
     address: booking.pickup?.address ?? null,
     blocked: geo.blocked,
@@ -158,6 +183,7 @@ export function DestinationSearchPage() {
         pickup={booking.pickup}
         destination={booking.destination}
         onMapClick={(point) => void mapClick(point)}
+        recenterToken={recenterToken}
         className="booking-full-map"
       />
       <header className="floating-back">
@@ -168,18 +194,18 @@ export function DestinationSearchPage() {
       </header>
       <section className="location-sheet">
         <div className="sheet-grabber" />
-        <div className="location-fields">
+        <div className={`location-fields ${pinMode === "pickup" ? "picking-pickup" : "picking-destination"}`}>
           <i className="pickup-dot" />
           <label>
             <span>ALIŞ NOKTASI</span>
             <input
               value={pickupLabel}
               readOnly
-              onClick={() => setPinMode(pinMode === "pickup" ? null : "pickup")}
+              onClick={() => setPinMode("pickup")}
             />
           </label>
           <button
-            onClick={() => void geo.request()}
+            onClick={() => void useCurrentAsPickup()}
             className={geo.loading ? "active" : ""}
             aria-label="Mevcut konumu kullan"
           >
@@ -196,7 +222,7 @@ export function DestinationSearchPage() {
             />
           </label>
           <button
-            onClick={() => setPinMode(pinMode === "destination" ? null : "destination")}
+            onClick={() => setPinMode("destination")}
             className={pinMode === "destination" ? "active" : ""}
             aria-label="Haritadan pin seç"
           >
@@ -222,16 +248,22 @@ export function DestinationSearchPage() {
             Haritada alış noktasına dokun
           </div>
         )}
-        {pinMode && booking.pickup && (
+        {booking.pickup && pinMode === "pickup" && (
           <div className="pin-hint">
             <Navigation />
-            {pinMode === "pickup" ? "Haritada alış noktasını seç" : "Haritada varış noktasına dokun"}
+            Haritada alış noktasını seç
           </div>
         )}
-        {loading && (
+        {booking.pickup && pinMode === "destination" && !booking.destination && (
+          <div className="pin-hint">
+            <Navigation />
+            Haritada varış noktasına dokun veya adres yaz
+          </div>
+        )}
+        {(searching || resolving) && (
           <div className="search-loading">
             <LoaderCircle />
-            Konum aranıyor…
+            {resolving ? "Konum çözülüyor…" : "Adres aranıyor…"}
           </div>
         )}
         {results.length > 0 && (
@@ -239,7 +271,7 @@ export function DestinationSearchPage() {
             {results.map((item) => (
               <button
                 key={item.id}
-                onClick={() => void selectDestination(item)}
+                onClick={() => selectDestination(item)}
               >
                 <MapPin />
                 <span>
@@ -291,10 +323,10 @@ export function DestinationSearchPage() {
         </div>
         <button
           className="request-primary"
-          disabled={!booking.pickup || !booking.destination || loading}
+          disabled={!booking.pickup || !booking.destination || routing}
           onClick={() => void continueRoute()}
         >
-          {loading ? <LoaderCircle /> : <Search />}Rotayı ve seçenekleri gör
+          {busy && routing ? <LoaderCircle /> : <Search />}Rotayı ve seçenekleri gör
         </button>
       </section>
     </div>

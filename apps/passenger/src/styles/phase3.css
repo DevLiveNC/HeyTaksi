@@ -1747,6 +1747,12 @@ input:focus-visible {
 .location-fields button.active {
   background: var(--yellow);
 }
+.location-fields.picking-pickup label:first-of-type input {
+  color: #2d79ff;
+}
+.location-fields.picking-destination label:nth-of-type(2) input {
+  color: #171813;
+}
 .location-fields svg {
   width: 16px;
 }

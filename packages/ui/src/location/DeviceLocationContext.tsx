@@ -32,8 +32,8 @@ interface DeviceLocationValue {
   error: string | null;
   hasFix: boolean;
   blocked: boolean;
-  /** Tarayıcı konum iznini ister. Tıklama işleyicisinde senkron çağrılmalıdır. */
-  request(): Promise<boolean>;
+  /** Tarayıcı konum iznini ister. Tıklama işleyicisinde senkron çağrılmalıdır. Düzeltmeyi döndürür. */
+  request(): Promise<DeviceLocation | null>;
 }
 
 const DeviceLocationContext = createContext<DeviceLocationValue | null>(null);
@@ -233,10 +233,10 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     [applyPosition, onWatchError, setPermission],
   );
 
-  const request = useCallback(() => {
+  const request = useCallback(async () => {
     if (!geolocationSupported()) {
       setPermission('unsupported');
-      return Promise.resolve(false);
+      return null;
     }
     // Jest aynı tıkta senkron kalmalı; mevcut izlemeyi kesme (kapı/izin flicker).
     startWatch();
@@ -249,7 +249,8 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
         setLoading(false);
       }
     });
-    return attempt;
+    const ok = await attempt;
+    return ok ? locationRef.current : null;
   }, [acquireFix, clearLocation, setPermission, startWatch, stopWatch]);
 
   useEffect(() => {

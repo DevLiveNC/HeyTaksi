@@ -1,6 +1,6 @@
 import { LocateFixed, Navigation } from "lucide-react";
-import { useEffect } from "react";
-import { coordinatesClose } from "@heytaksi/ui";
+import { useEffect, useState } from "react";
+import { shouldAdoptDevicePickup } from "@heytaksi/ui";
 import { InteractiveMap } from "../booking/InteractiveMap";
 import { useBooking } from "../booking/BookingContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
@@ -9,25 +9,35 @@ import { useNearbyDrivers } from "../../hooks/useNearbyDrivers";
 export function MapCanvas() {
   const booking = useBooking();
   const geo = useCurrentLocation();
-  // Faz 6: haritadaki taksiler artık Redis konum defterinden gelen canlı sürücülerdir.
   const { drivers, closestEtaSeconds, loading } = useNearbyDrivers(geo.location);
   const pickup = booking.pickup;
+  const setPickup = booking.setPickup;
+  const [recenterToken, setRecenterToken] = useState(0);
 
   useEffect(() => {
+    if (!shouldAdoptDevicePickup(pickup, geo.location, false)) return;
     if (!geo.location) return;
-    if (!pickup) {
-      booking.setPickup(geo.location);
-      return;
-    }
-    if (pickup.address === "Mevcut konum" && !coordinatesClose(pickup, geo.location, 0.0004)) {
-      booking.setPickup(geo.location);
-    }
-  }, [geo.location, pickup, booking]);
+    setPickup(geo.location);
+  }, [geo.location, pickup, setPickup]);
 
   return (
     <section className="map-card real" aria-label="Canlı konum haritası">
-      <InteractiveMap pickup={geo.location} nearbyDrivers={drivers} className="home-live-map" />
-      <button className="locate-button" onClick={() => void geo.request()} aria-label="Konumumu bul">
+      <InteractiveMap
+        pickup={geo.location}
+        nearbyDrivers={drivers}
+        recenterToken={recenterToken}
+        className="home-live-map"
+      />
+      <button
+        className="locate-button"
+        onClick={() => {
+          void geo.requestPickup().then((point) => {
+            if (point && shouldAdoptDevicePickup(pickup, point, false)) setPickup(point);
+            setRecenterToken((value) => value + 1);
+          });
+        }}
+        aria-label="Konumumu bul"
+      >
         <LocateFixed size={19} />
       </button>
       <div className="map-status">

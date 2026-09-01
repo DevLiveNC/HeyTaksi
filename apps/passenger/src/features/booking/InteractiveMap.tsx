@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createHtmlMarker,
   DEFAULT_MAP_CENTER,
+  ErrorBoundary,
   GoogleMapHost,
   osmKktcMapView,
   osmStyleUrl,
@@ -29,12 +30,45 @@ interface Props {
   driverLocation?: { latitude: number; longitude: number } | null | undefined;
   nearbyDrivers?: Array<{ id: string; latitude: number; longitude: number; heading: number | null }>;
   onMapClick?: (coordinate: { latitude: number; longitude: number }) => void;
+  /** Artınca kamera alış noktasına yeniden ortalanır (konumum düğmesi). */
+  recenterToken?: number;
   className?: string;
 }
 
 interface GoogleHandle {
   map: google.maps.Map;
   maps: typeof google.maps;
+}
+
+function safeRemoveMap(map: MapInstance | null) {
+  if (!map) return;
+  try {
+    map.remove();
+  } catch {
+    /* MapLibre stil yüklenmeden unmount: projection/patternAtlas henüz yok */
+  }
+}
+
+function upsertMapLibreMarker(
+  map: MapInstance,
+  current: maplibregl.Marker | null,
+  point: { latitude: number; longitude: number } | null | undefined,
+  kind: string,
+  label: string,
+): maplibregl.Marker | null {
+  if (!point) {
+    current?.remove();
+    return null;
+  }
+  if (current) {
+    current.setLngLat([point.longitude, point.latitude]);
+    return current;
+  }
+  const element = document.createElement("div");
+  element.className = `live-marker ${kind}`;
+  element.setAttribute("aria-label", label);
+  element.style.pointerEvents = "none";
+  return new maplibregl.Marker({ element }).setLngLat([point.longitude, point.latitude]).addTo(map);
 }
 
 function MapLibreInteractiveMap({
@@ -44,12 +78,21 @@ function MapLibreInteractiveMap({
   driverLocation,
   nearbyDrivers,
   onMapClick,
+  recenterToken = 0,
   className = "live-map",
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapInstance | null>(null);
-  const markers = useRef<maplibregl.Marker[]>([]);
+  const clickRef = useRef(onMapClick);
+  clickRef.current = onMapClick;
+  const pickupMarker = useRef<maplibregl.Marker | null>(null);
+  const destinationMarker = useRef<maplibregl.Marker | null>(null);
+  const driverMarker = useRef<maplibregl.Marker | null>(null);
   const nearbyMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const lastCamera = useRef("");
+  const lastRecenter = useRef(0);
+  const userMoved = useRef(false);
+
   useEffect(() => {
     if (!container.current) return;
     const map = new maplibregl.Map({
@@ -59,24 +102,35 @@ function MapLibreInteractiveMap({
         pickup && isInKktcServiceArea(pickup.latitude, pickup.longitude) ? pickup : DEFAULT_MAP_CENTER,
       ),
       attributionControl: {},
+      dragRotate: false,
+      pitchWithRotate: false,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.on("click", (event: MapMouseEvent) =>
-      onMapClick?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }),
+      clickRef.current?.({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }),
     );
+    map.on("dragstart", () => {
+      userMoved.current = true;
+    });
     const unwire = wireOsmMap(map);
     mapRef.current = map;
     return () => {
       unwire();
-      map.remove();
-      mapRef.current = null;
+      pickupMarker.current = null;
+      destinationMarker.current = null;
+      driverMarker.current = null;
       nearbyMarkers.current.clear();
+      mapRef.current = null;
+      safeRemoveMap(map);
     };
+    // İlk merkez yalnızca kurulumda; GPS sonradan easeTo ile gelir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    try {
     const seen = new Set<string>();
     for (const driver of nearbyDrivers ?? []) {
       seen.add(driver.id);
@@ -89,6 +143,7 @@ function MapLibreInteractiveMap({
       const element = document.createElement("div");
       element.className = "live-marker nearby-taxi";
       element.setAttribute("aria-label", "Yakındaki boş taksi");
+      element.style.pointerEvents = "none";
       element.style.rotate = `${driver.heading ?? 0}deg`;
       nearbyMarkers.current.set(
         driver.id,
@@ -100,43 +155,32 @@ function MapLibreInteractiveMap({
         marker.remove();
         nearbyMarkers.current.delete(id);
       }
+    } catch {
+      /* harita kalkmış */
+    }
   }, [nearbyDrivers]);
 
-  const lastCamera = useRef("");
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    markers.current.forEach((marker) => marker.remove());
-    markers.current = [];
-    const add = (point: Coordinate, kind: string) => {
-      const element = document.createElement("div");
-      element.className = `live-marker ${kind}`;
-      element.setAttribute(
-        "aria-label",
-        kind === "pickup" ? "Alış noktası" : kind === "driver" ? "Sürücü konumu" : "Varış noktası",
-      );
-      markers.current.push(
-        new maplibregl.Marker({ element }).setLngLat([point.longitude, point.latitude]).addTo(map),
-      );
-    };
-    if (pickup) add(pickup, "pickup");
-    if (destination) add(destination, "destination");
-    if (driverLocation) add({ ...driverLocation, address: "Sürücü konumu" }, "driver");
-    const nextCamera = cameraKey(pickup, destination, route);
-    if (nextCamera !== lastCamera.current) {
-      lastCamera.current = nextCamera;
-      if (pickup && destination) {
-        const bounds = new maplibregl.LngLatBounds(
-          [pickup.longitude, pickup.latitude],
-          [pickup.longitude, pickup.latitude],
-        );
-        bounds.extend([destination.longitude, destination.latitude]);
-        map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
-      } else if (pickup && isInKktcServiceArea(pickup.latitude, pickup.longitude)) {
-        map.easeTo({ center: [pickup.longitude, pickup.latitude], duration: 400 });
-      }
-    }
     const update = () => {
+      if (mapRef.current !== map) return;
+      try {
+      pickupMarker.current = upsertMapLibreMarker(map, pickupMarker.current, pickup, "pickup", "Alış noktası");
+      destinationMarker.current = upsertMapLibreMarker(
+        map,
+        destinationMarker.current,
+        destination,
+        "destination",
+        "Varış noktası",
+      );
+      driverMarker.current = upsertMapLibreMarker(
+        map,
+        driverMarker.current,
+        driverLocation,
+        "driver",
+        "Sürücü konumu",
+      );
       const data = route?.geometry ?? { type: "LineString" as const, coordinates: [] };
       const source = map.getSource("route") as GeoJSONSource | undefined;
       if (source) source.setData({ type: "Feature", properties: {}, geometry: data });
@@ -145,19 +189,74 @@ function MapLibreInteractiveMap({
           type: "geojson",
           data: { type: "Feature", properties: {}, geometry: data },
         });
-        map.addLayer({
-          id: "route-line",
-          type: "line",
-          source: "route",
-          paint: { "line-color": "#171813", "line-width": 5, "line-opacity": 0.88 },
-        });
+        if (!map.getLayer("route-line")) {
+          map.addLayer({
+            id: "route-line",
+            type: "line",
+            source: "route",
+            paint: { "line-color": "#171813", "line-width": 5, "line-opacity": 0.88 },
+          });
+        }
+      }
+      const nextCamera = cameraKey(pickup, destination, route);
+      const forceRecenter = recenterToken !== lastRecenter.current;
+      if (nextCamera === lastCamera.current && !forceRecenter) return;
+      lastCamera.current = nextCamera;
+      lastRecenter.current = recenterToken;
+      if (pickup && destination) {
+        const bounds = new maplibregl.LngLatBounds(
+          [pickup.longitude, pickup.latitude],
+          [pickup.longitude, pickup.latitude],
+        );
+        bounds.extend([destination.longitude, destination.latitude]);
+        userMoved.current = false;
+        map.fitBounds(bounds, { padding: 70, maxZoom: 15 });
+      } else if (
+        pickup &&
+        isInKktcServiceArea(pickup.latitude, pickup.longitude) &&
+        (!userMoved.current || forceRecenter)
+      ) {
+        map.easeTo({ center: [pickup.longitude, pickup.latitude], duration: forceRecenter ? 250 : 400 });
+      }
+      } catch {
+        /* harita unmount sırasında stil henüz hazır olmayabilir */
       }
     };
     if (map.isStyleLoaded()) update();
     else map.once("load", update);
-  }, [pickup, destination, route, driverLocation]);
+    return () => {
+      try {
+        map.off("load", update);
+      } catch {
+        /* harita kalkmış */
+      }
+    };
+  }, [pickup, destination, route, driverLocation, recenterToken]);
 
   return <div ref={container} className={className} aria-label="Yolculuk haritası" />;
+}
+
+function upsertGoogleMarker(
+  maps: typeof google.maps,
+  map: google.maps.Map,
+  current: HtmlMapMarker | null,
+  point: { latitude: number; longitude: number } | null | undefined,
+  kind: string,
+  label: string,
+): HtmlMapMarker | null {
+  if (!point) {
+    current?.setMap(null);
+    return null;
+  }
+  if (current) {
+    current.setPosition({ lat: point.latitude, lng: point.longitude });
+    return current;
+  }
+  const element = document.createElement("div");
+  element.className = `live-marker ${kind}`;
+  element.setAttribute("aria-label", label);
+  element.style.pointerEvents = "none";
+  return createHtmlMarker(maps, map, { lat: point.latitude, lng: point.longitude }, element);
 }
 
 function GoogleInteractiveMap({
@@ -167,46 +266,70 @@ function GoogleInteractiveMap({
   driverLocation,
   nearbyDrivers,
   google,
+  recenterToken = 0,
   className = "live-map",
 }: Props & { google: GoogleHandle }) {
-  const pointMarkers = useRef<HtmlMapMarker[]>([]);
+  const pickupMarker = useRef<HtmlMapMarker | null>(null);
+  const destinationMarker = useRef<HtmlMapMarker | null>(null);
+  const driverMarker = useRef<HtmlMapMarker | null>(null);
   const nearby = useRef<Map<string, HtmlMapMarker>>(new Map());
   const line = useRef<google.maps.Polyline | null>(null);
   const lastCamera = useRef("");
+  const lastRecenter = useRef(0);
+  const userMoved = useRef(false);
+
+  useEffect(() => {
+    const listener = google.map.addListener("dragstart", () => {
+      userMoved.current = true;
+    });
+    return () => listener.remove();
+  }, [google.map]);
 
   useEffect(() => {
     const { map, maps } = google;
-    for (const marker of nearby.current.values()) marker.setMap(null);
-    nearby.current.clear();
+    const seen = new Set<string>();
     for (const driver of nearbyDrivers ?? []) {
+      seen.add(driver.id);
+      const existing = nearby.current.get(driver.id);
+      if (existing) {
+        existing.setPosition({ lat: driver.latitude, lng: driver.longitude });
+        existing.setHeading(driver.heading ?? 0);
+        continue;
+      }
       const element = document.createElement("div");
       element.className = "live-marker nearby-taxi";
       element.setAttribute("aria-label", "Yakındaki boş taksi");
+      element.style.pointerEvents = "none";
       const marker = createHtmlMarker(maps, map, { lat: driver.latitude, lng: driver.longitude }, element);
       marker.setHeading(driver.heading ?? 0);
       nearby.current.set(driver.id, marker);
     }
-    return () => {
-      for (const marker of nearby.current.values()) marker.setMap(null);
-      nearby.current.clear();
-    };
+    for (const [id, marker] of nearby.current)
+      if (!seen.has(id)) {
+        marker.setMap(null);
+        nearby.current.delete(id);
+      }
   }, [google, nearbyDrivers]);
 
   useEffect(() => {
     const { map, maps } = google;
-    for (const marker of pointMarkers.current) marker.setMap(null);
-    pointMarkers.current = [];
-    const add = (point: { latitude: number; longitude: number }, kind: string, label: string) => {
-      const element = document.createElement("div");
-      element.className = `live-marker ${kind}`;
-      element.setAttribute("aria-label", label);
-      pointMarkers.current.push(
-        createHtmlMarker(maps, map, { lat: point.latitude, lng: point.longitude }, element),
-      );
-    };
-    if (pickup) add(pickup, "pickup", "Alış noktası");
-    if (destination) add(destination, "destination", "Varış noktası");
-    if (driverLocation) add(driverLocation, "driver", "Sürücü konumu");
+    pickupMarker.current = upsertGoogleMarker(maps, map, pickupMarker.current, pickup, "pickup", "Alış noktası");
+    destinationMarker.current = upsertGoogleMarker(
+      maps,
+      map,
+      destinationMarker.current,
+      destination,
+      "destination",
+      "Varış noktası",
+    );
+    driverMarker.current = upsertGoogleMarker(
+      maps,
+      map,
+      driverMarker.current,
+      driverLocation,
+      "driver",
+      "Sürücü konumu",
+    );
 
     const path = (route?.geometry?.coordinates ?? []).map(([lng, lat]) => ({ lat, lng }));
     if (!line.current) {
@@ -223,22 +346,28 @@ function GoogleInteractiveMap({
     }
 
     const nextCamera = cameraKey(pickup, destination, route);
-    if (nextCamera !== lastCamera.current) {
+    const forceRecenter = recenterToken !== lastRecenter.current;
+    if (nextCamera !== lastCamera.current || forceRecenter) {
       lastCamera.current = nextCamera;
+      lastRecenter.current = recenterToken;
       if (pickup && destination) {
         const bounds = new maps.LatLngBounds();
         bounds.extend({ lat: pickup.latitude, lng: pickup.longitude });
         bounds.extend({ lat: destination.latitude, lng: destination.longitude });
+        userMoved.current = false;
         map.fitBounds(bounds, 70);
-      } else if (pickup && isInKktcServiceArea(pickup.latitude, pickup.longitude)) {
+      } else if (
+        pickup &&
+        isInKktcServiceArea(pickup.latitude, pickup.longitude) &&
+        (!userMoved.current || forceRecenter)
+      ) {
         map.panTo({ lat: pickup.latitude, lng: pickup.longitude });
       }
     }
     return () => {
-      for (const marker of pointMarkers.current) marker.setMap(null);
-      pointMarkers.current = [];
+      /* işaretçiler bir sonraki senkrona kadar yerinde kalır; unmount GoogleMapHost'ta */
     };
-  }, [google, pickup, destination, route, driverLocation]);
+  }, [google, pickup, destination, route, driverLocation, recenterToken]);
 
   return <div className={`${className}-google-layers`} hidden />;
 }
@@ -250,6 +379,7 @@ export function InteractiveMap(props: Props) {
   }, []);
   const className = props.className ?? "live-map";
   return (
+    <ErrorBoundary fallback={<div className={className} aria-label="Harita yüklenemedi" />}>
     <div className={`${className}-wrap`} style={{ position: "relative", minHeight: 160, height: "100%" }}>
       <GoogleMapHost
         className={className}
@@ -272,5 +402,6 @@ export function InteractiveMap(props: Props) {
       />
       {engine ? <GoogleInteractiveMap {...props} google={engine} /> : null}
     </div>
+    </ErrorBoundary>
   );
 }

@@ -65,20 +65,31 @@ export function permissionFromPositionError(
   previous: GeoPermission,
 ): GeoPermission {
   if (error.code === 1) return 'denied';
+  // TIMEOUT / UNAVAILABLE yalnızca tarayıcı isteği kabul ettikten sonra gelir.
+  // `prompt`da bırakırsak “Konuma izin ver” kapısı, izin zaten açıkken kapanmaz.
+  if (error.code === 2 || error.code === 3) {
+    if (previous === 'unsupported') return previous;
+    return 'granted';
+  }
   return previous === 'granted' ? 'granted' : previous;
 }
 
 /**
- * Permissions API bazen watch yeniden başlarken `prompt` yayınlar.
+ * Permissions API bazen watch yeniden başlarken `prompt` yayınlar; Firefox ve
+ * kilit menüsünden Allow sonrası da yalancı `denied` döndürebilir.
  * Verilmiş izni veya eldeki düzeltmeyi düşürmeyiz; aksi halde tam ekran
- * kapı her birkaç saniyede bir açılıp tıklamaları yutar.
+ * kapı tarayıcı izni açıkken bile açık kalır.
  */
 export function mergeGeoPermission(
   current: GeoPermission,
   incoming: GeoPermission,
   hasFix: boolean,
 ): GeoPermission {
-  if (incoming === 'denied' || incoming === 'unsupported') return incoming;
+  if (incoming === 'unsupported') return incoming;
+  if (incoming === 'denied') {
+    if (current === 'granted' || hasFix) return 'granted';
+    return 'denied';
+  }
   if (incoming === 'granted') return 'granted';
   if (current === 'granted' || hasFix) return current === 'granted' ? 'granted' : current;
   return incoming;
@@ -86,7 +97,7 @@ export function mergeGeoPermission(
 
 /**
  * Kapı yalnızca gerçekten jest/izin gerektiğinde açılır.
- * Elde konum varken veya izin granted iken TIMEOUT overlay'i gösterilmez.
+ * Elde konum varken veya izin granted iken (GPS olmasa da) overlay gösterilmez.
  */
 export function locationPermissionBlocked(permission: GeoPermission, hasFix = false): boolean {
   if (permission === 'denied' || permission === 'unsupported') return true;

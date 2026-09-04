@@ -33,7 +33,7 @@ export function LocationPermissionGate({ audience }: { audience: 'passenger' | '
   const [skipped, setSkipped] = useState(false);
   // Elde düzeltme varken overlay açılmaz; aksi halde tıklama (yolcu isteği) yutulur.
   // Yolcu haritadan pin seçmek için kapıyı geçebilir; sürücü konum olmadan çevrim içi olamaz.
-  if (!blocked || hasFix || (audience === 'passenger' && skipped)) return null;
+  if (!blocked || hasFix || permission === 'granted' || (audience === 'passenger' && skipped)) return null;
   const text = copy[audience];
   const denied = permission === 'denied';
   const unsupported = permission === 'unsupported';

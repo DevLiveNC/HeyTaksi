@@ -124,6 +124,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(() => readRememberedPermission() === 'granted' && initialLocation() == null);
   const [positionError, setPositionError] = useState<GeolocationPositionError | null>(null);
   const watchId = useRef<number | null>(null);
+  const watchEpoch = useRef(0);
   const permissionStatus = useRef<PermissionStatus | null>(null);
   const locationRef = useRef<DeviceLocation | null>(location);
   const permissionRef = useRef(permission);
@@ -139,7 +140,11 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   );
 
   const stopWatch = useCallback(() => {
-    if (watchId.current == null || !navigator.geolocation) return;
+    watchEpoch.current += 1;
+    if (watchId.current == null || !navigator.geolocation) {
+      watchId.current = null;
+      return;
+    }
     navigator.geolocation.clearWatch(watchId.current);
     watchId.current = null;
   }, []);
@@ -173,6 +178,8 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   const onWatchError = useCallback(
     (error: GeolocationPositionError) => {
       if (error.code === 1) {
+        // getCurrentPosition sürerken gelen yalancı watch reddi, yeni verilen izni silmesin.
+        if (inFlightFix.current) return;
         setPositionError(error);
         setPermission('denied');
         clearLocation();
@@ -188,14 +195,32 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     [clearLocation, setPermission, stopWatch],
   );
 
-  const startWatch = useCallback(() => {
-    if (!geolocationSupported()) {
-      setPermission('unsupported');
-      return;
-    }
-    if (watchId.current != null) return;
-    watchId.current = navigator.geolocation.watchPosition(applyPosition, onWatchError, GEO_WATCH_OPTIONS);
-  }, [applyPosition, onWatchError, setPermission]);
+  const startWatch = useCallback(
+    (restart = false) => {
+      if (!geolocationSupported()) {
+        setPermission('unsupported');
+        return;
+      }
+      if (watchId.current != null && !restart) return;
+      if (watchId.current != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+      const epoch = ++watchEpoch.current;
+      watchId.current = navigator.geolocation.watchPosition(
+        (position) => {
+          if (epoch !== watchEpoch.current) return;
+          applyPosition(position);
+        },
+        (error) => {
+          if (epoch !== watchEpoch.current) return;
+          onWatchError(error);
+        },
+        GEO_WATCH_OPTIONS,
+      );
+    },
+    [applyPosition, onWatchError, setPermission],
+  );
 
   const acquireFix = useCallback(
     (force = false) => {
@@ -210,16 +235,22 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       const attempt = acquireDeviceFix()
         .then((position) => {
           applyPosition(position);
+          // İzin kabulünden önce başlayan watch, yalancı denied basabilir; epoch yenilenir.
+          startWatch(true);
           return true;
         })
         .catch((error: { code?: number }) => {
           if (error?.code === 1) {
-            onWatchError(error as GeolocationPositionError);
+            setPositionError(error as GeolocationPositionError);
+            setPermission('denied');
+            clearLocation();
+            stopWatch();
             return false;
           }
+          setPermission((current) => permissionFromPositionError(error as { code: number }, current));
+          startWatch(true);
           if (locationRef.current) return true;
           setPositionError(error as GeolocationPositionError);
-          setPermission((current) => permissionFromPositionError(error as { code: number }, current));
           return false;
         })
         .finally(() => {
@@ -230,7 +261,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       inFlightFix.current = attempt;
       return attempt;
     },
-    [applyPosition, onWatchError, setPermission],
+    [applyPosition, clearLocation, setPermission, startWatch, stopWatch],
   );
 
   const request = useCallback(async () => {
@@ -238,20 +269,11 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       setPermission('unsupported');
       return null;
     }
-    // Jest aynı tıkta senkron kalmalı; mevcut izlemeyi kesme (kapı/izin flicker).
-    startWatch();
-    const attempt = acquireFix(true);
-    void queryGeoPermission().then((state) => {
-      if (state === 'denied') {
-        setPermission('denied');
-        clearLocation();
-        stopWatch();
-        setLoading(false);
-      }
-    });
-    const ok = await attempt;
+    // Jest aynı tıkta senkron kalmalı. Eski denied izlemesini düşürüp yeniden bağla.
+    startWatch(true);
+    const ok = await acquireFix(true);
     return ok ? locationRef.current : null;
-  }, [acquireFix, clearLocation, setPermission, startWatch, stopWatch]);
+  }, [acquireFix, setPermission, startWatch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -259,34 +281,42 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       startWatch();
       void acquireFix();
     }
-    const attach = async () => {
-      const state = await queryGeoPermission();
-      if (cancelled) return;
-      applyIncomingPermission(state);
+    const recoverFromBrowserAllow = (state: GeoPermission, previouslyDenied: boolean) => {
+      if (state === 'unsupported') {
+        stopWatch();
+        return;
+      }
       if (state === 'granted') {
         startWatch();
         void acquireFix();
+        return;
       }
-      if (state === 'denied' || state === 'unsupported') {
-        clearLocation();
-        stopWatch();
+      // Kilit menüsünden Allow sonrası API hâlâ prompt/unknown kalabilir.
+      if (previouslyDenied && state !== 'denied') {
+        startWatch(true);
+        void acquireFix(true);
+        return;
       }
+      // Yalancı denied, elde granted/fix varken GPS ile doğrula; gerçek red kod 1’dir.
+      if (state === 'denied' && (permissionRef.current === 'granted' || locationRef.current)) {
+        void acquireFix(true);
+      }
+    };
+    const attach = async () => {
+      const state = await queryGeoPermission();
+      if (cancelled) return;
+      const wasDenied = permissionRef.current === 'denied';
+      applyIncomingPermission(state);
+      recoverFromBrowserAllow(state, wasDenied);
       if (!navigator.permissions?.query) return;
       try {
         const status = await navigator.permissions.query({ name: 'geolocation' });
         if (cancelled) return;
         permissionStatus.current = status;
         status.onchange = () => {
+          const previouslyDenied = permissionRef.current === 'denied';
           applyIncomingPermission(status.state);
-          if (status.state === 'granted') {
-            startWatch();
-            void acquireFix();
-          }
-          if (status.state === 'denied') {
-            clearLocation();
-            setLoading(false);
-            stopWatch();
-          }
+          recoverFromBrowserAllow(status.state, previouslyDenied);
         };
       } catch {
         /* Safari ve bazı gömülü tarayıcılar geolocation Permission API sunmaz */
@@ -296,11 +326,9 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
     const resume = () => {
       if (document.visibilityState !== 'visible') return;
       void queryGeoPermission().then((state) => {
+        const wasDenied = permissionRef.current === 'denied';
         applyIncomingPermission(state);
-        if (state === 'granted') {
-          startWatch();
-          void acquireFix();
-        }
+        recoverFromBrowserAllow(state, wasDenied);
       });
     };
     document.addEventListener('visibilitychange', resume);
@@ -312,7 +340,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       if (permissionStatus.current) permissionStatus.current.onchange = null;
       stopWatch();
     };
-  }, [acquireFix, applyIncomingPermission, clearLocation, startWatch, stopWatch]);
+  }, [acquireFix, applyIncomingPermission, startWatch, stopWatch]);
 
   const hasFix = location != null;
   const value = useMemo<DeviceLocationValue>(

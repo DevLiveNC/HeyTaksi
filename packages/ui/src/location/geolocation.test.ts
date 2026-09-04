@@ -22,8 +22,11 @@ describe('mergeGeoPermission', () => {
     expect(mergeGeoPermission('prompt', 'prompt', true)).toBe('prompt');
   });
 
-  it('red ve desteklenmiyor durumlarını her zaman uygular', () => {
-    expect(mergeGeoPermission('granted', 'denied', true)).toBe('denied');
+  it('Permissions API denied, granted veya canlı düzeltmeyi ezmez', () => {
+    expect(mergeGeoPermission('granted', 'denied', false)).toBe('granted');
+    expect(mergeGeoPermission('granted', 'denied', true)).toBe('granted');
+    expect(mergeGeoPermission('prompt', 'denied', true)).toBe('granted');
+    expect(mergeGeoPermission('prompt', 'denied', false)).toBe('denied');
     expect(mergeGeoPermission('granted', 'unsupported', false)).toBe('unsupported');
   });
 
@@ -65,7 +68,13 @@ describe('permissionFromPositionError', () => {
   it('yalnızca permission denied kodunu denied yapar', () => {
     expect(permissionFromPositionError({ code: 1 }, 'granted')).toBe('denied');
     expect(permissionFromPositionError({ code: 3 }, 'granted')).toBe('granted');
-    expect(permissionFromPositionError({ code: 2 }, 'prompt')).toBe('prompt');
+  });
+
+  it('zaman aşımı ve sinyal yok tarayıcının izni kabul ettiğini gösterir', () => {
+    expect(permissionFromPositionError({ code: 3 }, 'prompt')).toBe('granted');
+    expect(permissionFromPositionError({ code: 2 }, 'unknown')).toBe('granted');
+    expect(permissionFromPositionError({ code: 2 }, 'denied')).toBe('granted');
+    expect(permissionFromPositionError({ code: 3 }, 'unsupported')).toBe('unsupported');
   });
 });
 
@@ -101,9 +110,17 @@ describe('sürücü/yolcu flaş senaryosu', () => {
     expect(geoErrorMessage(permission, { code: 2 }, true)).toBeNull();
   });
 
-  it('hiç düzeltme yokken ilk zaman aşımı hâlâ görünür', () => {
-    expect(locationPermissionBlocked('prompt', false)).toBe(true);
-    expect(geoErrorMessage('prompt', { code: 3 }, false)).toMatch(/Konum alınamadı/);
+  it('hiç düzeltme yokken ilk zaman aşımı hâlâ görünür; izin kapısı kapanır', () => {
+    const permission = permissionFromPositionError({ code: 3 }, 'prompt');
+    expect(permission).toBe('granted');
+    expect(locationPermissionBlocked(permission, false)).toBe(false);
+    expect(geoErrorMessage(permission, { code: 3 }, false)).toMatch(/Konum alınamadı/);
+  });
+
+  it('tarayıcı izni açıkken yalancı denied kapıyı yeniden açmaz', () => {
+    const permission = mergeGeoPermission('granted', 'denied', true);
+    expect(permission).toBe('granted');
+    expect(locationPermissionBlocked(permission, true)).toBe(false);
   });
 });
 

@@ -49,6 +49,35 @@ export function geolocationSupported(): boolean {
   return typeof navigator !== 'undefined' && Boolean(navigator.geolocation) && window.isSecureContext;
 }
 
+/** iframe / Permissions-Policy geolocation’ı kapatmış mı. */
+export function geolocationPolicyAllowed(): boolean {
+  if (typeof document === 'undefined') return true;
+  const doc = document as Document & {
+    permissionsPolicy?: { allowsFeature(name: string): boolean };
+    featurePolicy?: { allowsFeature(name: string): boolean };
+  };
+  const policy = doc.permissionsPolicy ?? doc.featurePolicy;
+  if (!policy?.allowsFeature) return true;
+  try {
+    return policy.allowsFeature('geolocation');
+  } catch {
+    return true;
+  }
+}
+
+export function isEmbeddedBrowsingContext(): boolean {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Permissions.query geolocation için güvenilmezdir (Firefox çoğu sürümde
+ * site Allow iken bile `prompt`; Safari API’yi hiç sunmaz).
+ * Asıl kaynak getCurrentPosition / watchPosition sonucudur.
+ */
 export async function queryGeoPermission(): Promise<GeoPermission> {
   if (!geolocationSupported()) return 'unsupported';
   if (!navigator.permissions?.query) return 'unknown';
@@ -75,6 +104,17 @@ export function permissionFromPositionError(
 }
 
 /**
+ * Jest olmadan getCurrentPosition kod 1: Safari izin açıkken bile jest ister.
+ * Permissions API `denied` değilse bunu tarayıcıda Block sanmayız.
+ */
+export function permissionFromSilentDenial(apiState: GeoPermission): GeoPermission {
+  if (apiState === 'unsupported') return 'unsupported';
+  if (apiState === 'denied') return 'denied';
+  if (apiState === 'granted') return 'granted';
+  return 'prompt';
+}
+
+/**
  * Permissions API bazen watch yeniden başlarken `prompt` yayınlar; Firefox ve
  * kilit menüsünden Allow sonrası da yalancı `denied` döndürebilir.
  * Verilmiş izni veya eldeki düzeltmeyi düşürmeyiz; aksi halde tam ekran
@@ -96,13 +136,17 @@ export function mergeGeoPermission(
 }
 
 /**
- * Kapı yalnızca gerçekten jest/izin gerektiğinde açılır.
- * Elde konum varken veya izin granted iken (GPS olmasa da) overlay gösterilmez.
+ * Tam ekran kapı yalnızca gerçek red, destek yok veya jest gerektiğinde açılır.
+ * Permissions API `prompt`/`unknown` tarayıcıda Allow olsa da dönebilir; overlay açılmaz.
  */
-export function locationPermissionBlocked(permission: GeoPermission, hasFix = false): boolean {
-  if (permission === 'denied' || permission === 'unsupported') return true;
+export function locationPermissionBlocked(
+  permission: GeoPermission,
+  hasFix = false,
+  needsGesture = false,
+): boolean {
   if (permission === 'granted' || hasFix) return false;
-  return true;
+  if (permission === 'denied' || permission === 'unsupported') return true;
+  return needsGesture;
 }
 
 export function isTransientGeoError(error: { code: number } | null | undefined): boolean {
@@ -120,6 +164,9 @@ export function geoErrorMessage(
       : 'Konum için güvenli bağlantı (HTTPS) gerekir.';
   }
   if (permission === 'denied') {
+    if (typeof window !== 'undefined' && isEmbeddedBrowsingContext() && !geolocationPolicyAllowed()) {
+      return 'Bu gömülü pencerede konum kapalı. Siteyi yeni sekmede açıp adres çubuğundan Konum’a izin ver.';
+    }
     return 'Konum izni tarayıcıda kapalı. Adres çubuğundaki kilit simgesinden Konum’a izin ver, ardından tekrar dene.';
   }
   if (hasFix && isTransientGeoError(error)) return null;

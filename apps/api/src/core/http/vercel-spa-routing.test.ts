@@ -46,20 +46,23 @@ describe('Vercel project config', () => {
     };
     expect(config.fluid).toBe(true);
     expect(config.regions).toEqual(['fra1']);
+    expect('functionFailoverRegions' in config).toBe(false);
     const cacheFor = (source: string) =>
       config.headers.find((rule) => rule.source === source)?.headers.find((header) => header.key === 'Cache-Control')?.value;
     expect(cacheFor('/assets/(.*)')).toContain('immutable');
     expect(cacheFor('/index.html')).toContain('must-revalidate');
   });
 
-  it('runs the API near Cyprus/Turkey and sweeps dispatch on a cron', () => {
+  it('runs the API in Frankfurt without Enterprise-only failover regions', () => {
     const config = JSON.parse(readFileSync(join(repoRoot, 'apps', 'api', 'vercel.json'), 'utf8')) as {
       fluid?: boolean;
       regions?: string[];
+      functionFailoverRegions?: string[];
       crons?: Array<{ path: string; schedule: string }>;
     };
     expect(config.fluid).toBe(true);
     expect(config.regions).toEqual(['fra1']);
-    expect(config.crons?.some((job) => job.path === '/api/v1/dispatch/tick')).toBe(true);
+    expect(config.functionFailoverRegions).toBeUndefined();
+    expect(config.crons ?? []).toEqual([]);
   });
 });

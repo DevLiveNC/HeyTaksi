@@ -7,7 +7,6 @@
   "ignoreCommand": "node ../../scripts/vercel-ignore.mjs driver",
   "fluid": true,
   "regions": ["fra1"],
-  "functionFailoverRegions": ["cdg1"],
   "functions": { "api/index.js": { "maxDuration": 15 } },
   "env": {
     "VITE_MAP_PROVIDER": "osm",

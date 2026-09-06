@@ -67,24 +67,27 @@ export function HomePage() {
       <Suspense fallback={<div className="map-card map-loading" aria-label="Harita yükleniyor" />}>
         <MapCanvas />
       </Suspense>
-      {active && !["completed", "cancelled"].includes(active.status) && (
-        <Link to={`/ride/${active.id}`} className="home-active-ride">
-          <Clock3 size={16} />
-          <span>
-            <strong>Aktif yolculuğun var</strong>
-            <small>{active.pickupAddress} → {active.destinationAddress}</small>
-          </span>
-          <ArrowRight size={16} />
-        </Link>
-      )}
-      <button className="destination-box" onClick={() => navigate("/search")}>
-        <span className="search-dot" />
-        <span>
-          <small>Yolculuğa başla</small>
-          <strong>Nereye gidiyorsun?</strong>
-        </span>
-        <Search size={21} />
-      </button>
+      <div className="home-cta-slot">
+        {active && !["completed", "cancelled"].includes(active.status) ? (
+          <Link to={`/ride/${active.id}`} className="home-active-ride">
+            <Clock3 size={16} />
+            <span>
+              <strong>Aktif yolculuğun var</strong>
+              <small>{active.pickupAddress} → {active.destinationAddress}</small>
+            </span>
+            <ArrowRight size={16} />
+          </Link>
+        ) : (
+          <button className="destination-box" onClick={() => navigate("/search")}>
+            <span className="search-dot" />
+            <span>
+              <small>Yolculuğa başla</small>
+              <strong>Nereye gidiyorsun?</strong>
+            </span>
+            <Search size={21} />
+          </button>
+        )}
+      </div>
       <section className="quick-addresses" aria-labelledby="quick-title">
         <div className="section-heading">
           <div>

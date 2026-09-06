@@ -26,9 +26,20 @@ Bu OSM değerleri ayrıca her frontend `vercel.json` / `.env.production` ve API 
 
 API Project'ine Neon `DATABASE_URL` (veya Vercel Postgres `POSTGRES_URL`) ile `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` eklenmelidir. `CORS_ORIGINS` içine frontend origin'lerini yazabilirsiniz; Hey Taksi `*.vercel.app` hostları ayrıca otomatik kabul edilir.
 
+## Performans (Fluid Compute)
+
+Tüm projeler `fra1` (Frankfurt) bölgesinde çalışır; KKTC/Türkiye gecikmesi için `cdg1` yedek bölgedir. `fluid: true` ile instance'lar istekler arasında yeniden kullanılır.
+
+- **SPA CDN:** Vite hash'li `/assets/*` dosyaları `immutable` (1 yıl) önbelleğe alınır; `index.html` her deploy'da yeniden doğrulanır.
+- **Monorepo ignore:** Yalnızca ilgili `apps/*` + `packages/*` değişince o proje build olur (`scripts/vercel-ignore.mjs`).
+- **API soğuk başlangıç:** Vercel'de `REDIS_URL` localhost ise Redis'e bağlanılmaz (aksi halde ~10 sn timeout). Swagger UI yüklenmez. PostgreSQL havuzu 3 bağlantı ile sınırlıdır; Neon **pooled** (`-pooler`) connection string kullanın.
+- **Dispatch:** Functions idle iken `setInterval` çalışmaz. Ride/dispatch isteklerinde arka planda `sweep` çalışır; Pro planda `GET /api/v1/dispatch/tick` cron'u dakikada bir yedekler. Vercel `CRON_SECRET` değerini otomatik tanımlar.
+- **Harita:** MapLibre giriş ekranı paketinden ayrılır. Nominatim/OSRM yanıtları instance içinde kısa TTL ile önbelleğe alınır.
+- **Gözlem:** Production SPA `AuthProvider` içinde Vercel Analytics + Speed Insights enjekte eder. Dashboard'da her frontend proje için Speed Insights'ı açın.
+
 ## Neon PostgreSQL
 
-`DATABASE_URL` yalnızca Vercel'in şifreli Environment Variables alanına eklenmelidir. Credential repoya veya frontend değişkenlerine yazılmamalıdır. Migration deploy öncesi güvenilir bir CI/yerel ortamdan bir kez çalıştırılır:
+`DATABASE_URL` yalnızca Vercel'in şifreli Environment Variables alanına eklenmelidir. Credential repoya veya frontend değişkenlerine yazılmamalıdır. Serverless için Neon **connection pooler** URL'sini kullanın (`-pooler` host, `sslmode=require`). Migration deploy öncesi güvenilir bir CI/yerel ortamdan bir kez çalıştırılır:
 
 ```bash
 DATABASE_URL='postgresql://...' npm run db:migrate
@@ -39,20 +50,6 @@ Paylaşılan/veri sızıntısı şüphesi olan PostgreSQL parolası önce Neon p
 
 ## Platform sınırı
 
-Vercel Functions kalıcı WebSocket bağlantısı barındırmaz. Faz 2 REST/auth testleri Vercel'de çalışır; `/ws` lokal veya uzun yaşayan container ortamında çalışır. Realtime production testi için Ably, Pusher, Soketi veya ayrı container servisi kullanılmalıdır. Hosted Redis kullanılıyorsa `REDIS_URL` TLS destekli sağlayıcı adresi olmalıdır.
+Vercel Functions kalıcı, çok instance'lı WebSocket ağı barındırmaz: Fluid Compute bir bağlantıyı instance süresince tutabilir ama reconnect ve pub/sub için Redis (veya Ably/Pusher/Soketi) gerekir. Faz 2 REST/auth testleri Vercel'de çalışır. Hosted Redis kullanılıyorsa `REDIS_URL` TLS destekli sağlayıcı adresi olmalıdır; verilmezse konum defteri PostgreSQL yedeğine düşer.
 
-
-## Neon PostgreSQL
-
-`DATABASE_URL` yalnızca Vercel'in şifreli Environment Variables alanına eklenmelidir. Credential repoya veya frontend değişkenlerine yazılmamalıdır. Migration deploy öncesi güvenilir bir CI/yerel ortamdan bir kez çalıştırılır:
-
-```bash
-DATABASE_URL='postgresql://...' npm run db:migrate
-DATABASE_URL='postgresql://...' ADMIN_EMAIL='...' ADMIN_PASSWORD='...' npm run db:seed-admin
-```
-
-Paylaşılan/veri sızıntısı şüphesi olan PostgreSQL parolası önce Neon panelinden rotate edilmelidir.
-
-## Platform sınırı
-
-Vercel Functions kalıcı WebSocket bağlantısı barındırmaz. Faz 2 REST/auth testleri Vercel'de çalışır; `/ws` lokal veya uzun yaşayan container ortamında çalışır. Realtime production testi için Ably, Pusher, Soketi veya ayrı container servisi kullanılmalıdır. Hosted Redis kullanılıyorsa `REDIS_URL` TLS destekli sağlayıcı adresi olmalıdır.
+Hobby planda cron en fazla günde bir çalışır. Dakikalık dispatch taraması **Pro** gerektirir.

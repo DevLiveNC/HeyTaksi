@@ -44,8 +44,11 @@ export const locationRoutes: FastifyPluginAsync = async (app) => {
       data: await maps.route(input.pickup, input.destination),
     };
   });
-  app.get("/maps-config", { preHandler: app.authenticate }, async () => ({
-    success: true,
-    data: maps.clientConfig(),
-  }));
+  app.get("/maps-config", { preHandler: app.authenticate }, async (_request, reply) => {
+    reply.header("Cache-Control", "private, max-age=300");
+    return {
+      success: true,
+      data: maps.clientConfig(),
+    };
+  });
 };

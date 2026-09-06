@@ -1,12 +1,14 @@
 import fp from 'fastify-plugin';
 import { Redis } from 'ioredis';
 import { env } from '../../config/env.js';
+import { shouldConnectRedis } from '../../config/runtime.js';
 
 export const redisPlugin = fp(
   async (app) => {
     const redis = new Redis(env.REDIS_URL, {
       lazyConnect: true,
       maxRetriesPerRequest: 2,
+      connectTimeout: 1_500,
       // Bağlantı koptuğunda komutlar hata döndürür; çağıranlar PostgreSQL'e düşer.
       enableOfflineQueue: false,
       retryStrategy: (attempt) => Math.min(attempt * 500, 5_000),
@@ -17,10 +19,15 @@ export const redisPlugin = fp(
     // Faz 6: konum defteri Redis'i birincil kaynak olarak kullanır, bu yüzden
     // bağlantı açılışta kurulur. Redis yoksa API yine ayağa kalkar; store
     // otomatik olarak PostgreSQL'e düşer ve arka planda yeniden bağlanmayı dener.
-    try {
-      await redis.connect();
-    } catch (error) {
-      app.log.warn({ err: error }, 'Redis başlangıçta bağlanamadı; PostgreSQL yedeğiyle devam ediliyor.');
+    // Vercel'de varsayılan localhost URL soğuk başlangıcı ~10 sn kilitlemesin.
+    if (shouldConnectRedis()) {
+      try {
+        await redis.connect();
+      } catch (error) {
+        app.log.warn({ err: error }, 'Redis başlangıçta bağlanamadı; PostgreSQL yedeğiyle devam ediliyor.');
+      }
+    } else {
+      app.log.info('Redis atlandı (Vercel + localhost URL); PostgreSQL yedeği kullanılıyor.');
     }
 
     app.decorate('redis', redis);

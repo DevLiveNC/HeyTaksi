@@ -31,7 +31,35 @@ describe('SPA API proxy', () => {
     expect(source).toMatch(/accept-encoding/);
     expect(source).toMatch(/duplex/);
     expect(source).toMatch(/API_UNREACHABLE/);
+    expect(source).toMatch(/AbortSignal\.timeout/);
     expect(source).toMatch(/try \{/);
     expect(source).toMatch(/catch \{/);
+  });
+});
+
+describe('Vercel project config', () => {
+  it.each(['admin', 'passenger', 'driver'] as const)('%s caches hashed assets and revalidates HTML', (app) => {
+    const config = JSON.parse(readFileSync(join(repoRoot, 'apps', app, 'vercel.json'), 'utf8')) as {
+      fluid?: boolean;
+      regions?: string[];
+      headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
+    };
+    expect(config.fluid).toBe(true);
+    expect(config.regions).toEqual(['fra1']);
+    const cacheFor = (source: string) =>
+      config.headers.find((rule) => rule.source === source)?.headers.find((header) => header.key === 'Cache-Control')?.value;
+    expect(cacheFor('/assets/(.*)')).toContain('immutable');
+    expect(cacheFor('/index.html')).toContain('must-revalidate');
+  });
+
+  it('runs the API near Cyprus/Turkey and sweeps dispatch on a cron', () => {
+    const config = JSON.parse(readFileSync(join(repoRoot, 'apps', 'api', 'vercel.json'), 'utf8')) as {
+      fluid?: boolean;
+      regions?: string[];
+      crons?: Array<{ path: string; schedule: string }>;
+    };
+    expect(config.fluid).toBe(true);
+    expect(config.regions).toEqual(['fra1']);
+    expect(config.crons?.some((job) => job.path === '/api/v1/dispatch/tick')).toBe(true);
   });
 });

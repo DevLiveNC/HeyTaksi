@@ -42,7 +42,10 @@ export async function buildApp() {
   await app.register(realtimeHubPlugin);
   await app.register(dispatchPlugin);
 
-  app.get('/health/live', async () => ({ status: 'ok', service: 'heytaksi-api', timestamp: new Date().toISOString() }));
+  app.get('/health/live', async (_request, reply) => {
+    reply.header('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30');
+    return { status: 'ok', service: 'heytaksi-api', timestamp: new Date().toISOString() };
+  });
   app.get('/health/ready', async (_request, reply) => {
     const [database, redis] = await Promise.allSettled([app.db.query('SELECT 1'), app.redis.ping()]);
     const ready = database.status === 'fulfilled' && redis.status === 'fulfilled';

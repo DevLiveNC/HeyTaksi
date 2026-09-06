@@ -1,5 +1,8 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance, MapMouseEvent } from "maplibre-gl";
+import { setWorkerUrl } from "maplibre-gl";
+import mapLibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createHtmlMarker,
@@ -12,6 +15,9 @@ import {
 } from "@heytaksi/ui";
 import type { HtmlMapMarker } from "@heytaksi/ui";
 import { isInKktcServiceArea, type Coordinate, type RouteEstimate } from "@heytaksi/shared";
+
+// MapLibre v6: Vite üretim derlemesinde vektör karoları worker'sız yüklenmez.
+setWorkerUrl(mapLibreWorkerUrl);
 
 function cameraKey(
   pickup?: Coordinate | null,

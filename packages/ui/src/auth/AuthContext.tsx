@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type PropsWith
 import type { DeviceInput, Role, UserIdentity } from '@heytaksi/shared';
 import { describeAuthFailure, networkFailureMessage } from './auth-errors';
 import { describeDevice, persistKeyedStorage, storedSessionValue } from './session-store';
+import { VercelTelemetry } from '../vercel-telemetry';
 
 interface Session { user: UserIdentity; accessToken: string; refreshToken: string; }
 interface AuthContextValue {
@@ -133,7 +134,12 @@ export function AuthProvider({ apiUrl, storageKey = defaultStorageKey, children 
     },
   // API yardımcıları mevcut session snapshot'ına bağlıdır.
   }), [apiUrl, loading, hydrating, session]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <VercelTelemetry />
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

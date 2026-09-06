@@ -1,10 +1,11 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { useCallback, type PropsWithChildren } from 'react';
+import { lazy, Suspense, useCallback, type PropsWithChildren } from 'react';
 import { AuthGate, AuthPage, MapsKeyProvider, useAuth } from '@heytaksi/ui';
 import { DispatchProvider, useDispatch } from '../state/DispatchContext';
-import { DispatchPage } from '../features/dispatch/DispatchPage';
 import { AdminDriversPage, AdminPassengersPage, AdminRidesPage, AdminSupportPage, AdminVehiclesPage } from '../features/ops/ListPages';
 import { dispatchApi } from '../services/dispatchApi';
+
+const DispatchPage = lazy(() => import('../features/dispatch/DispatchPage').then((module) => ({ default: module.DispatchPage })));
 
 const modules = [
   { name: 'Yolculuklar', path: '/rides' },
@@ -105,6 +106,7 @@ function AdminPanel() {
         </button>
       </aside>
       <main>
+        <Suspense fallback={<div className="auth-loading"><span>HT</span><p>Harita hazırlanıyor…</p></div>}>
         <Routes>
           <Route path="/overview" element={<Overview />} />
           <Route path="/canli-operasyon" element={<DispatchPage />} />
@@ -115,6 +117,7 @@ function AdminPanel() {
           <Route path="/support" element={<AdminSupportPage />} />
           <Route path="*" element={<Navigate to="/canli-operasyon" replace />} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   );

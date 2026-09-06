@@ -1,5 +1,8 @@
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapInstance } from "maplibre-gl";
+import { setWorkerUrl } from "maplibre-gl";
+import mapLibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createHtmlMarker,
@@ -10,6 +13,8 @@ import {
   type HtmlMapMarker,
 } from "@heytaksi/ui";
 import { DEFAULT_MAP_CENTER, isInKktcServiceArea, type Coordinate, type DriverRideDetail, type Hotspot, type RouteEstimate } from "@heytaksi/shared";
+
+setWorkerUrl(mapLibreWorkerUrl);
 
 interface Props {
   driverLocation: { latitude: number; longitude: number };

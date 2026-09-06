@@ -1,8 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+  "installCommand": "cd ../.. && npm install",
   "buildCommand": "cd ../.. && npm run build --workspace=@heytaksi/shared && npm run build --workspace=@heytaksi/api",
-  "functions": { "api/index.ts": { "maxDuration": 30 } },
+  "ignoreCommand": "node ../../scripts/vercel-ignore.mjs api",
+  "fluid": true,
+  "regions": ["fra1"],
+  "functionFailoverRegions": ["cdg1"],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 30,
+      "excludeFiles": "{**/*.test.ts,src/infrastructure/database/seed-*.ts,src/infrastructure/database/simulate-fleet.ts}"
+    }
+  },
+  "crons": [{ "path": "/api/v1/dispatch/tick", "schedule": "* * * * *" }],
   "env": {
     "MAP_PROVIDER": "osm",
     "GEOCODING_URL": "https://nominatim.openstreetmap.org",

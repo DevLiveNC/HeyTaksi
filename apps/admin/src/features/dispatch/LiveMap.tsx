@@ -1,8 +1,13 @@
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapInstance } from 'maplibre-gl';
+import { setWorkerUrl } from 'maplibre-gl';
+import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_MAP_CENTER, type LiveDriverMarker, type LiveRideMarker } from '@heytaksi/shared';
 import { GoogleMapHost, osmKktcMapView, osmStyleUrl, wireOsmMap } from '@heytaksi/ui';
+
+setWorkerUrl(mapLibreWorkerUrl);
 
 interface Props {
   drivers: LiveDriverMarker[];

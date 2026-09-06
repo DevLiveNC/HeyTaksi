@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { detectNativeShell } from '@heytaksi/shared';
 import './location-gate.css';
 import { useDeviceLocation } from './DeviceLocationContext';
 
@@ -35,6 +36,7 @@ export function LocationPermissionGate({ audience }: { audience: 'passenger' | '
   // Yolcu haritadan pin seçmek için kapıyı geçebilir; sürücü konum olmadan çevrim içi olamaz.
   if (!blocked || hasFix || permission === 'granted' || (audience === 'passenger' && skipped)) return null;
   const text = copy[audience];
+  const native = detectNativeShell();
   const denied = permission === 'denied';
   const unsupported = permission === 'unsupported';
   return (
@@ -48,14 +50,18 @@ export function LocationPermissionGate({ audience }: { audience: 'passenger' | '
         <p>{text.body}</p>
         {denied && (
           <div className="ht-location-steps">
-            <strong>İzni tarayıcıdan aç</strong>
-            Adres çubuğundaki kilit veya konum simgesine dokun, Konum’u “İzin ver” yap, sonra aşağıdaki düğmeye bas.
+            <strong>{native ? 'İzni telefon ayarlarından aç' : 'İzni tarayıcıdan aç'}</strong>
+            {native
+              ? 'Ayarlar → Uygulamalar → Hey Taksi → İzinler → Konum’u “Uygulamayı kullanırken” yap, sonra aşağıdaki düğmeye bas.'
+              : 'Adres çubuğundaki kilit veya konum simgesine dokun, Konum’u “İzin ver” yap, sonra aşağıdaki düğmeye bas.'}
           </div>
         )}
         {unsupported && (
           <div className="ht-location-steps">
             <strong>Konum kullanılamıyor</strong>
-            Uygulamayı güncel bir tarayıcıda ve HTTPS üzerinden aç. Konum servislerinin cihazda açık olduğundan emin ol.
+            {native
+              ? 'Konum servislerinin cihazda açık olduğundan emin ol ve uygulamayı yeniden başlat.'
+              : 'Uygulamayı güncel bir tarayıcıda ve HTTPS üzerinden aç. Konum servislerinin cihazda açık olduğundan emin ol.'}
           </div>
         )}
         {error && permission !== 'denied' && permission !== 'unsupported' && <p className="ht-location-error">{error}</p>}

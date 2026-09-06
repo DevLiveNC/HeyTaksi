@@ -5,7 +5,12 @@
  * (yolcu/yönetim SPA'sı, API değil) tarayıcıda CORS'suz 404 üretir; fetch
  * `Failed to fetch` / `Load failed` fırlatır ve giriş "Sunucuya bağlanılamadı"
  * olarak görünür. Aynı origin `/api` proxy'si gerçek API'ye gider.
+ *
+ * Capacitor kabuğunda aynı origin proxy yoktur; boş veya SPA hostu native
+ * varsayılanına (`PRODUCTION_API_BASE`) düşer.
  */
+
+import { PRODUCTION_API_BASE, PRODUCTION_WS_URL } from './native-shell.js';
 
 const FRONTEND_PROJECTS = [
   'hey-taksi-admin',
@@ -31,24 +36,33 @@ export function isHeyTaksiFrontendHost(hostname: string): boolean {
   return FRONTEND_PROJECTS.some((name) => host === `${name}.vercel.app` || host.startsWith(`${name}-`));
 }
 
-export function resolveApiBaseUrl(configured?: string | null): string {
+export function resolveApiBaseUrl(
+  configured?: string | null,
+  options?: { native?: boolean },
+): string {
+  const native = options?.native === true;
   const raw = configured?.trim().replace(/\/$/, '');
-  if (!raw) return '/api/v1';
-  if (raw.startsWith('/')) return raw;
+  if (!raw) return native ? PRODUCTION_API_BASE : '/api/v1';
+  if (raw.startsWith('/')) return native ? PRODUCTION_API_BASE : raw;
   const hostname = hostnameOf(raw);
-  if (!hostname || isHeyTaksiFrontendHost(hostname)) return '/api/v1';
+  if (!hostname || isHeyTaksiFrontendHost(hostname)) {
+    return native ? PRODUCTION_API_BASE : '/api/v1';
+  }
   return raw;
 }
 
 export function resolveWsBaseUrl(
   configured: string | undefined | null,
   location: Pick<URL, 'protocol' | 'host'>,
+  options?: { native?: boolean },
 ): string {
+  const native = options?.native === true;
   const raw = configured?.trim();
   if (raw) {
     const hostname = hostnameOf(raw);
     if (hostname && !isHeyTaksiFrontendHost(hostname)) return raw;
   }
+  if (native) return PRODUCTION_WS_URL;
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${scheme}://${location.host}/ws`;
 }

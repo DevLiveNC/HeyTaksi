@@ -6,6 +6,15 @@ export {
   resolveWsBaseUrl,
 } from './client-endpoints.js';
 export {
+  PRODUCTION_API_BASE,
+  PRODUCTION_API_ORIGIN,
+  PRODUCTION_WS_URL,
+  detectNativeShell,
+  isNativeAppLocation,
+  nativeDevicePlatform,
+  type NativeDevicePlatform,
+} from './native-shell.js';
+export {
   DEFAULT_MAP_CENTER,
   KKTC_MAP_MAX_BOUNDS,
   KKTC_MAP_MIN_ZOOM,

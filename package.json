@@ -23,7 +23,12 @@
     "db:seed-demo": "npm run db:seed-demo --workspace=@heytaksi/api",
     "db:seed-all-demo": "npm run db:seed-all-demo --workspace=@heytaksi/api",
     "db:seed-fleet": "npm run db:seed-fleet --workspace=@heytaksi/api",
-    "dev:simulate-fleet": "npm run dev:simulate-fleet --workspace=@heytaksi/api"
+    "dev:simulate-fleet": "npm run dev:simulate-fleet --workspace=@heytaksi/api",
+    "icons": "node scripts/generate-app-icons.mjs",
+    "build:native:passenger": "npm run build:native --workspace=@heytaksi/passenger",
+    "build:native:driver": "npm run build:native --workspace=@heytaksi/driver",
+    "cap:add:android": "npm run cap:add:android --workspace=@heytaksi/passenger && npm run cap:add:android --workspace=@heytaksi/driver",
+    "cap:sync": "npm run cap:sync --workspace=@heytaksi/passenger && npm run cap:sync --workspace=@heytaksi/driver"
   },
   "engines": {
     "node": ">=22"

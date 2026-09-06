@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { isHeyTaksiFrontendHost, resolveApiBaseUrl, resolveWsBaseUrl } from '../../packages/shared/src/client-endpoints.ts';
+import {
+  PRODUCTION_API_BASE,
+  PRODUCTION_WS_URL,
+  isNativeAppLocation,
+  nativeDevicePlatform,
+} from '../../packages/shared/src/native-shell.ts';
 
 describe('resolveApiBaseUrl', () => {
   it('uses the same-origin proxy when the variable is empty', () => {
@@ -17,6 +23,15 @@ describe('resolveApiBaseUrl', () => {
     expect(resolveApiBaseUrl('https://hey-taksi.vercel.app/api/v1')).toBe('/api/v1');
     expect(resolveApiBaseUrl('https://hey-taksi-admin.vercel.app/api/v1')).toBe('/api/v1');
     expect(resolveApiBaseUrl('https://hey-taksi-admin-4ku900qvw-devlivencs-projects.vercel.app/api/v1')).toBe('/api/v1');
+  });
+
+  it('uses the production API host inside a native shell without a proxy', () => {
+    expect(resolveApiBaseUrl(undefined, { native: true })).toBe(PRODUCTION_API_BASE);
+    expect(resolveApiBaseUrl('/api/v1', { native: true })).toBe(PRODUCTION_API_BASE);
+    expect(resolveApiBaseUrl('https://hey-taksi-passenger.vercel.app/api/v1', { native: true })).toBe(PRODUCTION_API_BASE);
+    expect(resolveApiBaseUrl('https://hey-taksi-api.vercel.app/api/v1', { native: true })).toBe(
+      'https://hey-taksi-api.vercel.app/api/v1',
+    );
   });
 });
 
@@ -36,5 +51,27 @@ describe('resolveWsBaseUrl', () => {
 
   it('keeps an API websocket origin', () => {
     expect(resolveWsBaseUrl('wss://hey-taksi-api.vercel.app/ws', admin)).toBe('wss://hey-taksi-api.vercel.app/ws');
+  });
+
+  it('does not point WebSocket at the Capacitor WebView host', () => {
+    const native = { protocol: 'https:', host: 'localhost' };
+    expect(resolveWsBaseUrl(undefined, native, { native: true })).toBe(PRODUCTION_WS_URL);
+    expect(resolveWsBaseUrl('wss://hey-taksi-passenger.vercel.app/ws', native, { native: true })).toBe(PRODUCTION_WS_URL);
+  });
+});
+
+describe('native shell origin', () => {
+  it('recognizes Capacitor Android and iOS WebView locations', () => {
+    expect(isNativeAppLocation({ protocol: 'https:', hostname: 'localhost', port: '' })).toBe(true);
+    expect(isNativeAppLocation({ protocol: 'capacitor:', hostname: 'localhost', port: '' })).toBe(true);
+    expect(isNativeAppLocation({ protocol: 'http:', hostname: 'localhost', port: '5173' })).toBe(false);
+  });
+
+  it('reads ios/android from the Capacitor bridge', () => {
+    const win = {
+      Capacitor: { isNativePlatform: () => true, getPlatform: () => 'android' },
+      location: { protocol: 'https:', hostname: 'localhost' },
+    } as unknown as Window;
+    expect(nativeDevicePlatform(win)).toBe('android');
   });
 });

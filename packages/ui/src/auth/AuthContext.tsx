@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
 import type { DeviceInput, Role, UserIdentity } from '@heytaksi/shared';
 import { describeAuthFailure, networkFailureMessage } from './auth-errors';
+import { describeDevice, persistKeyedStorage, storedSessionValue } from './session-store';
 
 interface Session { user: UserIdentity; accessToken: string; refreshToken: string; }
 interface AuthContextValue {
@@ -19,15 +20,12 @@ interface AuthContextValue {
 }
 const AuthContext = createContext<AuthContextValue | null>(null);
 const defaultStorageKey = 'heytaksi.session';
-const deviceKey = 'heytaksi.device';
 
 function getDevice(): DeviceInput {
-  let id = localStorage.getItem(deviceKey);
-  if (!id) { id = crypto.randomUUID(); localStorage.setItem(deviceKey, id); }
-  return { id, name: navigator.userAgent.includes('Mobile') ? 'Mobil web' : 'Web tarayıcı', platform: 'web' };
+  return describeDevice();
 }
 function storedSession(storageKey: string): Session | null {
-  try { return JSON.parse(localStorage.getItem(storageKey) ?? 'null') as Session | null; } catch { return null; }
+  try { return JSON.parse(storedSessionValue(storageKey) ?? 'null') as Session | null; } catch { return null; }
 }
 
 function requestHeaders(init?: RequestInit, extra?: Record<string, string>) {
@@ -66,8 +64,7 @@ export function AuthProvider({ apiUrl, storageKey = defaultStorageKey, children 
   const [loading, setLoading] = useState(false);
   const save = (next: Session | null) => {
     setSession(next);
-    if (next) localStorage.setItem(storageKey, JSON.stringify(next));
-    else localStorage.removeItem(storageKey);
+    persistKeyedStorage(storageKey, next ? JSON.stringify(next) : null);
   };
   const post = async <T,>(path: string, body: unknown): Promise<T> => {
     const payloadBody = JSON.stringify(body);

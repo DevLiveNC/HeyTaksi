@@ -9,9 +9,33 @@
     "@heytaksi/shared": "*",
     "@types/google.maps": "^3.58.1"
   },
-  "peerDependencies": { "react": ">=19" },
+  "peerDependencies": {
+    "react": ">=19",
+    "@capacitor/app": "^7",
+    "@capacitor/geolocation": "^7",
+    "@capacitor/preferences": "^7",
+    "@capacitor/splash-screen": "^7",
+    "@capacitor/status-bar": "^7"
+  },
+  "peerDependenciesMeta": {
+    "@capacitor/app": { "optional": true },
+    "@capacitor/geolocation": { "optional": true },
+    "@capacitor/preferences": { "optional": true },
+    "@capacitor/splash-screen": { "optional": true },
+    "@capacitor/status-bar": { "optional": true }
+  },
   "scripts": {
     "test": "vitest run"
   },
-  "devDependencies": { "@types/react": "^19.0.0", "react": "^19.0.0", "typescript": "^5.0.0", "vitest": "^3.0.0" }
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/geolocation": "^7.1.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  }
 }

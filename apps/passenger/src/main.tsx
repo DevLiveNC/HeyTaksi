@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider, ErrorBoundary } from '@heytaksi/ui';
+import { AuthProvider, ErrorBoundary, bootstrapNativeRuntime } from '@heytaksi/ui';
 import { setWorkerUrl } from 'maplibre-gl';
 import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { App } from './routes/App';
@@ -77,6 +77,22 @@ function installDevGeoMock() {
   }
 }
 
-installDevGeoMock();
+const STORAGE_KEY = 'heytaksi.passenger.session';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><AuthProvider apiUrl={apiBaseUrl} storageKey="heytaksi.passenger.session"><BrowserRouter><ErrorBoundary><App /></ErrorBoundary></BrowserRouter></AuthProvider></React.StrictMode>);
+async function start() {
+  await bootstrapNativeRuntime(STORAGE_KEY, 'light');
+  installDevGeoMock();
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <AuthProvider apiUrl={apiBaseUrl} storageKey={STORAGE_KEY}>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
+        </BrowserRouter>
+      </AuthProvider>
+    </React.StrictMode>,
+  );
+}
+
+void start();

@@ -13,6 +13,7 @@ import {
   locationPermissionBlocked,
   mergeGeoPermission,
   permissionFromPositionError,
+  permissionFromSilentDenial,
 } from './geolocation';
 
 describe('mergeGeoPermission', () => {
@@ -43,13 +44,19 @@ describe('locationPermissionBlocked', () => {
   });
 
   it('reddedilmiş veya desteklenmeyen izni bloklar', () => {
-    expect(locationPermissionBlocked('denied', true)).toBe(true);
+    expect(locationPermissionBlocked('denied', false)).toBe(true);
     expect(locationPermissionBlocked('unsupported', false)).toBe(true);
+    expect(locationPermissionBlocked('denied', true)).toBe(false);
   });
 
-  it('düzeltme yokken jest ister', () => {
-    expect(locationPermissionBlocked('prompt', false)).toBe(true);
-    expect(locationPermissionBlocked('unknown', false)).toBe(true);
+  it('Permissions API prompt/unknown tarayıcı Allow iken kapı açmaz', () => {
+    expect(locationPermissionBlocked('prompt', false)).toBe(false);
+    expect(locationPermissionBlocked('unknown', false)).toBe(false);
+  });
+
+  it('sessiz deneme jest isteyince kapıyı açar', () => {
+    expect(locationPermissionBlocked('prompt', false, true)).toBe(true);
+    expect(locationPermissionBlocked('granted', false, true)).toBe(false);
   });
 });
 
@@ -75,6 +82,16 @@ describe('permissionFromPositionError', () => {
     expect(permissionFromPositionError({ code: 2 }, 'unknown')).toBe('granted');
     expect(permissionFromPositionError({ code: 2 }, 'denied')).toBe('granted');
     expect(permissionFromPositionError({ code: 3 }, 'unsupported')).toBe('unsupported');
+  });
+});
+
+describe('permissionFromSilentDenial', () => {
+  it('Permissions API denied değilse jest bekler, Block sanmaz', () => {
+    expect(permissionFromSilentDenial('unknown')).toBe('prompt');
+    expect(permissionFromSilentDenial('prompt')).toBe('prompt');
+    expect(permissionFromSilentDenial('denied')).toBe('denied');
+    expect(permissionFromSilentDenial('granted')).toBe('granted');
+    expect(permissionFromSilentDenial('unsupported')).toBe('unsupported');
   });
 });
 

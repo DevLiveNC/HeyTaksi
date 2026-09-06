@@ -13,6 +13,12 @@
       "VITE_MAP_STYLE_URL": "https://tiles.openfreemap.org/styles/liberty"
     }
   },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [{ "key": "Permissions-Policy", "value": "geolocation=(self)" }]
+    }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api?rest=/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

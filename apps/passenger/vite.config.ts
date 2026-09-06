@@ -11,6 +11,9 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
     port: 5173,
+    headers: {
+      'Permissions-Policy': 'geolocation=(self)',
+    },
     proxy: {
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
       '/ws': { target: 'ws://localhost:3000', ws: true },

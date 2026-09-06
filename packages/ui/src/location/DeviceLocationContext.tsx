@@ -18,6 +18,7 @@ import {
   locationPermissionBlocked,
   mergeGeoPermission,
   permissionFromPositionError,
+  permissionFromSilentDenial,
   queryGeoPermission,
   readDeviceLocation,
   type DeviceLocation,
@@ -43,7 +44,8 @@ const FIX_KEY = 'heytaksi.geo.lastFix';
 function readRememberedPermission(): GeoPermission {
   try {
     const value = sessionStorage.getItem(MEMORY_KEY);
-    if (value === 'granted' || value === 'denied' || value === 'prompt' || value === 'unsupported') return value;
+    // denied/prompt oturum kaydı kilit menüsünden Allow sonrası bayat kalır.
+    if (value === 'granted' || value === 'unsupported') return value;
   } catch {
     /* gizli sekme */
   }
@@ -121,7 +123,8 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   }, []);
   const [location, setLocation] = useState<DeviceLocation | null>(initialLocation);
   const [heading, setHeading] = useState<number | undefined>();
-  const [loading, setLoading] = useState(() => readRememberedPermission() === 'granted' && initialLocation() == null);
+  const [loading, setLoading] = useState(() => initialLocation() == null);
+  const [needsGesture, setNeedsGesture] = useState(false);
   const [positionError, setPositionError] = useState<GeolocationPositionError | null>(null);
   const watchId = useRef<number | null>(null);
   const watchEpoch = useRef(0);
@@ -155,6 +158,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       const previous = locationRef.current;
       if (previous && deviceLocationUnchanged(previous, next)) {
         setPermission('granted');
+        setNeedsGesture(false);
         setPositionError(null);
         return;
       }
@@ -163,6 +167,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       setLocation(next);
       setHeading(next.heading);
       setPermission('granted');
+      setNeedsGesture(false);
       setPositionError(null);
     },
     [setPermission],
@@ -180,6 +185,21 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       if (error.code === 1) {
         // getCurrentPosition sürerken gelen yalancı watch reddi, yeni verilen izni silmesin.
         if (inFlightFix.current) return;
+        const current = permissionRef.current;
+        if (current === 'granted' || locationRef.current) {
+          setPositionError(error);
+          stopWatch();
+          setLoading(false);
+          return;
+        }
+        if (current !== 'denied') {
+          setPermission('prompt');
+          setNeedsGesture(true);
+          setPositionError(error);
+          stopWatch();
+          setLoading(false);
+          return;
+        }
         setPositionError(error);
         setPermission('denied');
         clearLocation();
@@ -223,9 +243,10 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   );
 
   const acquireFix = useCallback(
-    (force = false) => {
+    (force = false, fromUserGesture = false) => {
       if (!geolocationSupported()) {
         setPermission('unsupported');
+        setNeedsGesture(false);
         return Promise.resolve(false);
       }
       if (locationRef.current && !force) return Promise.resolve(true);
@@ -241,12 +262,21 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
         })
         .catch((error: { code?: number }) => {
           if (error?.code === 1) {
+            const next = fromUserGesture
+              ? 'denied'
+              : permissionFromSilentDenial(permissionRef.current);
             setPositionError(error as GeolocationPositionError);
-            setPermission('denied');
-            clearLocation();
-            stopWatch();
+            setPermission(next);
+            setNeedsGesture(next === 'prompt');
+            if (next === 'denied' || next === 'unsupported') {
+              clearLocation();
+              stopWatch();
+            } else if (next === 'granted') {
+              startWatch(true);
+            }
             return false;
           }
+          setNeedsGesture(false);
           setPermission((current) => permissionFromPositionError(error as { code: number }, current));
           startWatch(true);
           if (locationRef.current) return true;
@@ -267,19 +297,25 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
   const request = useCallback(async () => {
     if (!geolocationSupported()) {
       setPermission('unsupported');
+      setNeedsGesture(false);
       return null;
     }
     // Jest aynı tıkta senkron kalmalı. Eski denied izlemesini düşürüp yeniden bağla.
+    setNeedsGesture(false);
     startWatch(true);
-    const ok = await acquireFix(true);
+    const ok = await acquireFix(true, true);
     return ok ? locationRef.current : null;
   }, [acquireFix, setPermission, startWatch]);
 
   useEffect(() => {
     let cancelled = false;
-    if (readRememberedPermission() === 'granted') {
+    if (geolocationSupported()) {
+      // Tarayıcıda Allow olsa da Permissions API prompt/unknown kalabilir; GPS’i her yüklemede dene.
       startWatch();
       void acquireFix();
+    } else {
+      setPermission('unsupported');
+      setLoading(false);
     }
     const recoverFromBrowserAllow = (state: GeoPermission, previouslyDenied: boolean) => {
       if (state === 'unsupported') {
@@ -287,6 +323,7 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
         return;
       }
       if (state === 'granted') {
+        setNeedsGesture(false);
         startWatch();
         void acquireFix();
         return;
@@ -351,10 +388,10 @@ export function DeviceLocationProvider({ children }: PropsWithChildren) {
       loading,
       error: geoErrorMessage(permission, positionError, hasFix),
       hasFix,
-      blocked: locationPermissionBlocked(permission, hasFix),
+      blocked: locationPermissionBlocked(permission, hasFix, needsGesture),
       request,
     }),
-    [permission, location, heading, loading, positionError, hasFix, request],
+    [permission, location, heading, loading, positionError, hasFix, needsGesture, request],
   );
 
   return <DeviceLocationContext.Provider value={value}>{children}</DeviceLocationContext.Provider>;

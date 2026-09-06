@@ -1,4 +1,5 @@
-/** Varsayılan harita merkezi (Lefkoşa, KKTC). Gerçek GPS yerine kullanılamaz. */
+import { detectNativeShell } from '@heytaksi/shared';
+
 export { DEFAULT_MAP_CENTER } from '@heytaksi/shared';
 
 export type GeoPermission = PermissionState | 'unknown' | 'unsupported';
@@ -45,8 +46,10 @@ export const GEO_MOVE_EPSILON_DEG = 0.0001;
 /** ~12°; sürücü iğnesi her mikro heading değişiminde dönmesin. */
 export const GEO_HEADING_EPSILON_DEG = 12;
 
-export function geolocationSupported(): boolean {
-  return typeof navigator !== 'undefined' && Boolean(navigator.geolocation) && window.isSecureContext;
+export function geolocationSupported(win: Window | undefined = typeof window === 'undefined' ? undefined : window): boolean {
+  if (!win) return false;
+  if (detectNativeShell(win)) return true;
+  return Boolean(win.navigator.geolocation) && win.isSecureContext;
 }
 
 /** iframe / Permissions-Policy geolocation’ı kapatmış mı. */
@@ -157,13 +160,18 @@ export function geoErrorMessage(
   permission: GeoPermission,
   error: { code: number } | null,
   hasFix: boolean,
+  native = typeof window !== 'undefined' && detectNativeShell(),
 ): string | null {
   if (permission === 'unsupported') {
+    if (native) return 'Bu cihazda konum servisi kullanılamıyor. Konum servislerini açıp tekrar dene.';
     return typeof window !== 'undefined' && window.isSecureContext
       ? 'Bu tarayıcı konum paylaşımını desteklemiyor.'
       : 'Konum için güvenli bağlantı (HTTPS) gerekir.';
   }
   if (permission === 'denied') {
+    if (native) {
+      return 'Konum izni kapalı. Telefon ayarlarından Hey Taksi için Konum’a izin ver, ardından tekrar dene.';
+    }
     if (typeof window !== 'undefined' && isEmbeddedBrowsingContext() && !geolocationPolicyAllowed()) {
       return 'Bu gömülü pencerede konum kapalı. Siteyi yeni sekmede açıp adres çubuğundan Konum’a izin ver.';
     }

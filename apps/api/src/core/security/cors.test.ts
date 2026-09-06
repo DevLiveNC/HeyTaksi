@@ -15,6 +15,12 @@ describe('isAllowedCorsOrigin', () => {
     expect(isAllowedCorsOrigin('https://hey-taksi-passenger-2v4nsdl9k-devlivencs-projects.vercel.app', listed)).toBe(true);
   });
 
+  it('allows Capacitor and Ionic WebView origins', () => {
+    expect(isAllowedCorsOrigin('https://localhost', listed)).toBe(true);
+    expect(isAllowedCorsOrigin('capacitor://localhost', listed)).toBe(true);
+    expect(isAllowedCorsOrigin('ionic://localhost', listed)).toBe(true);
+  });
+
   it('rejects unrelated origins', () => {
     expect(isAllowedCorsOrigin('https://evil.example', listed)).toBe(false);
     expect(isAllowedCorsOrigin('https://hey-taksi-administration.vercel.app', listed)).toBe(false);

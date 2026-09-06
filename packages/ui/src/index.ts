@@ -50,3 +50,4 @@ export {
 export { DeviceLocationProvider, useDeviceLocation } from './location/DeviceLocationContext';
 export { LocationPermissionGate } from './location/LocationPermissionGate';
 export { LocationPermissionToggle } from './location/LocationPermissionToggle';
+export { bootstrapNativeRuntime } from './native/bootstrap';

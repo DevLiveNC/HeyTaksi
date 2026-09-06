@@ -7,13 +7,15 @@ function isHeyTaksiVercelHost(hostname: string) {
   return vercelProjects.some((name) => hostname === `${name}.vercel.app` || hostname.startsWith(`${name}-`));
 }
 
-/** Same-origin, listed origins, localhost, and Hey Taksi Vercel production/preview hosts. */
+const WEBVIEW_PROTOCOLS = new Set(['http:', 'https:', 'capacitor:', 'ionic:']);
+
+/** Same-origin, listed origins, localhost (web + Capacitor), and Hey Taksi Vercel hosts. */
 export function isAllowedCorsOrigin(origin: string | undefined, allowed: string[]) {
   if (!origin) return true;
   if (allowed.includes('*') || allowed.includes(origin)) return true;
   let parsed: URL;
   try { parsed = new URL(origin); } catch { return false; }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  if (!WEBVIEW_PROTOCOLS.has(parsed.protocol)) return false;
   if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return true;
   return isHeyTaksiVercelHost(parsed.hostname);
 }

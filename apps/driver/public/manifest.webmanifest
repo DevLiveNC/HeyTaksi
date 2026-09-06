@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "Hey Taksi Sürücü",
+  "short_name": "Sürücü",
+  "description": "Hey Taksi sürücü konsolu — teklif al, yolculuğu yönet.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111214",
+  "theme_color": "#111214",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

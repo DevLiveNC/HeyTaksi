@@ -24,11 +24,11 @@ body {
   background: var(--d-bg);
   color: var(--d-text);
   position: relative;
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 .driver-topbar {
   min-height: 74px;
-  padding: 14px 18px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 14px;
   display: flex;
   align-items: center;
   gap: 12px;

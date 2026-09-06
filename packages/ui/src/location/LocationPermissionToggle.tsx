@@ -1,3 +1,4 @@
+import { detectNativeShell } from '@heytaksi/shared';
 import { useDeviceLocation } from './DeviceLocationContext';
 
 export function LocationPermissionToggle({
@@ -24,9 +25,13 @@ export function LocationPermissionToggle({
         <strong>{label}</strong>
         <small>
           {permission === 'denied'
-            ? 'Tarayıcıda kapalı — izin vermek için dokun'
+            ? detectNativeShell()
+              ? 'Telefon ayarlarında kapalı — izin vermek için dokun'
+              : 'Tarayıcıda kapalı — izin vermek için dokun'
             : permission === 'unsupported'
-              ? 'Bu tarayıcıda kullanılamıyor'
+              ? detectNativeShell()
+                ? 'Bu cihazda kullanılamıyor'
+                : 'Bu tarayıcıda kullanılamıyor'
               : on
                 ? 'Açık — gerçek konumun kullanılıyor'
                 : caption}

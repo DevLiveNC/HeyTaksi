@@ -1,5 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "jsx": "react-jsx", "noEmit": true, "declaration": false, "types": ["vite/client", "google.maps"] },
-  "include": ["src", "../../packages/ui/src"]
+  "include": ["src", "../../packages/ui/src"],
+  "exclude": ["../../packages/ui/src/**/*.test.ts", "../../packages/ui/src/**/*.test.tsx"]
 }

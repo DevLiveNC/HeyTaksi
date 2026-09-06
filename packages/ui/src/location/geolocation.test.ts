@@ -14,6 +14,7 @@ import {
   mergeGeoPermission,
   permissionFromPositionError,
   permissionFromSilentDenial,
+  geolocationSupported,
 } from './geolocation';
 
 describe('mergeGeoPermission', () => {
@@ -68,6 +69,11 @@ describe('geoErrorMessage', () => {
 
   it('konum yokken zaman aşımını gösterir', () => {
     expect(geoErrorMessage('granted', { code: 3 }, false)).toMatch(/Konum alınamadı/);
+  });
+
+  it('native kabukta tarayıcı yerine telefon ayarlarını gösterir', () => {
+    expect(geoErrorMessage('denied', { code: 1 }, false, true)).toMatch(/telefon ayarlarından/i);
+    expect(geoErrorMessage('unsupported', null, false, true)).toMatch(/cihazda konum servisi/i);
   });
 });
 
@@ -224,6 +230,18 @@ describe('getCurrentPositionOnce / acquireDeviceFix', () => {
     };
     await expect(acquireDeviceFix(geo)).rejects.toMatchObject({ code: 1 });
     expect(GEO_COARSE_FIX_OPTIONS.enableHighAccuracy).toBe(false);
+  });
+});
+
+describe('geolocationSupported', () => {
+  it('native kabukta secure-context olmasa da desteklenir', () => {
+    const win = {
+      isSecureContext: false,
+      navigator: {},
+      Capacitor: { isNativePlatform: () => true, getPlatform: () => 'ios' },
+      location: { protocol: 'capacitor:', hostname: 'localhost' },
+    } as unknown as Window;
+    expect(geolocationSupported(win)).toBe(true);
   });
 });
 

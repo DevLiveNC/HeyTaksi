@@ -6,9 +6,25 @@ coverage/
 .env.*
 !.env.example
 !.env.production
+!.env.native
 *.log
 .DS_Store
 .vscode/
 .idea/
 
 *.tsbuildinfo
+
+# Capacitor native build artifacts (android/ios projects themselves are committed after `cap add`)
+**/android/.gradle
+**/android/build
+**/android/app/build
+**/android/local.properties
+**/android/captures
+**/android/app/src/main/assets/public
+**/android/capacitor-cordova-android-plugins
+**/ios/App/Pods
+**/ios/App/App/public
+**/ios/DerivedData
+*.keystore
+*.jks
+

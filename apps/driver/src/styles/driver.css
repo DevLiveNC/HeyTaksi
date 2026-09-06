@@ -14,6 +14,7 @@
 
 body {
   background: var(--d-bg);
+  color: var(--d-text);
 }
 
 /* Uygulama çerçevesi */
@@ -445,25 +446,35 @@ body {
   margin: 0;
 }
 
-/* Teklif sayfası */
+/* Teklif sayfası — overlay .driver-app dışında; renkler kalıtımla siyah kalmasın. */
 .offer-overlay {
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: #0b0c0ecc;
-  backdrop-filter: blur(6px);
+  background: #0b0c0ef2;
+  backdrop-filter: blur(10px);
   display: grid;
   place-items: end center;
   padding: 18px;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  color: var(--d-text);
+  overflow: auto;
 }
 .offer-card {
   width: min(520px, 100%);
-  background: var(--d-surface);
+  max-height: min(92dvh, 740px);
+  overflow: auto;
+  background: #1c1f24;
+  color: var(--d-text);
   border: 1px solid #3d3a1c;
   border-radius: 28px 28px 22px 22px;
   padding: 20px;
   box-shadow: 0 -20px 60px #00000080;
   animation: offer-rise 0.3s ease;
+}
+.offer-card strong,
+.offer-card b {
+  color: var(--d-text);
 }
 @keyframes offer-rise {
   from {
@@ -522,6 +533,7 @@ body {
 }
 .offer-ring b {
   font-size: 16px;
+  color: var(--d-yellow);
 }
 .offer-passenger {
   display: flex;
@@ -550,6 +562,7 @@ body {
 }
 .offer-passenger strong {
   font-size: 14px;
+  color: var(--d-text);
 }
 .offer-passenger small {
   display: inline-flex;
@@ -600,6 +613,7 @@ body {
 .offer-route strong {
   font-size: 13px;
   line-height: 1.4;
+  color: var(--d-text);
 }
 .offer-stats {
   display: grid;
@@ -623,6 +637,7 @@ body {
 }
 .offer-stats strong {
   font-size: 15px;
+  color: var(--d-text);
 }
 .offer-stats .earn strong {
   color: var(--d-green);
@@ -644,10 +659,16 @@ body {
   font-weight: 800;
   font-size: 14px;
   border: 1px solid var(--d-line);
+  cursor: pointer;
+}
+.offer-actions button:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 .offer-actions .reject {
-  background: var(--d-surface-2);
-  color: #ff8589;
+  background: #2a2224;
+  color: #ff9b9e;
+  border-color: #57302f;
 }
 .offer-actions .accept {
   background: var(--d-yellow);

@@ -155,13 +155,21 @@ export function DriverProvider({ children }: PropsWithChildren) {
             );
             void refreshDashboard();
           } else if (event === "ride.updated") {
-            const updated = detail as Partial<DriverRideDetail>;
-            if (updated.id && updated.id === rideRef.current) {
-              setRide((current) =>
-                current && current.id === updated.id
-                  ? ({ ...current, ...updated } as DriverRideDetail)
-                  : current,
-              );
+            const updated = detail as Partial<DriverRideDetail> & { rideId?: string };
+            const updatedId = updated.id ?? updated.rideId;
+            if (updatedId && updatedId === rideRef.current) {
+              setRide((current) => {
+                if (!current || current.id !== updatedId) return current;
+                // Konum ping'leri teklif kartını bozmasın.
+                if (current.offerId && !updated.status && !updated.pickupAddress) return current;
+                const merged = { ...current, ...updated, id: current.id } as DriverRideDetail;
+                // Atama sonrası teklif kartı kapanmalı.
+                if (merged.offerId && merged.status && !["searching", "driver_assigned"].includes(merged.status)) {
+                  merged.offerId = null;
+                  merged.offerExpiresAt = null;
+                }
+                return merged;
+              });
             } else if (updated.status === "searching" && rideRef.current === null) {
               void refreshRide();
             }
@@ -261,28 +269,35 @@ export function DriverProvider({ children }: PropsWithChildren) {
     [run, refreshDashboard, refreshRide],
   );
 
+  const rideStateRef = useRef<DriverRideDetail | null>(null);
+  rideStateRef.current = ride;
+
   const acceptOffer = useCallback(
     () =>
       run(async () => {
-        if (!ride) return;
-        const accepted = await driverApi.acceptRide(fetcherRef.current, ride.id);
-        setRide(accepted);
+        const current = rideStateRef.current;
+        if (!current) throw new Error("Aktif teklif bulunamadı.");
+        const accepted = await driverApi.acceptRide(fetcherRef.current, current.id);
+        setRide({ ...accepted, offerId: null, offerExpiresAt: null });
         setOfferArrivedAt(null);
+        setOfferExpiresAt(null);
         await refreshDashboard();
       }),
-    [ride, run, refreshDashboard],
+    [run, refreshDashboard],
   );
 
   const rejectOffer = useCallback(
     (reason?: string) =>
       run(async () => {
-        if (!ride) return;
-        await driverApi.rejectRide(fetcherRef.current, ride.id, reason);
+        const current = rideStateRef.current;
+        if (!current) throw new Error("Aktif teklif bulunamadı.");
+        await driverApi.rejectRide(fetcherRef.current, current.id, reason);
         setRide(null);
         setOfferArrivedAt(null);
+        setOfferExpiresAt(null);
         await refreshDashboard();
       }),
-    [ride, run, refreshDashboard],
+    [run, refreshDashboard],
   );
 
   const advance = useCallback(

@@ -281,13 +281,19 @@
   color: #fff;
   margin-bottom: 1px;
 }
-.destination-box {
-  width: calc(100% - 32px);
-  margin: -31px 16px 0;
+.home-cta-slot {
   position: relative;
   z-index: 5;
+  width: calc(100% - 32px);
+  margin: -31px 16px 0;
+}
+.destination-box {
+  width: 100%;
+  margin: 0;
+  position: relative;
   border: 0;
   background: white;
+  color: var(--ink);
   border-radius: 19px;
   box-shadow: 0 14px 34px #3030261a;
   min-height: 72px;
@@ -320,6 +326,7 @@
 .destination-box strong {
   font-size: 16px;
   margin-top: 3px;
+  color: var(--ink);
 }
 .section-heading {
   display: flex;
@@ -2334,17 +2341,32 @@ input:focus-visible {
   background: #171717;
   color: #fff;
   text-decoration: none;
-  border-radius: 16px;
+  border-radius: 19px;
+  min-height: 72px;
   padding: 14px 16px;
-  margin: 12px 0;
+  margin: 0;
+  box-shadow: 0 14px 34px #3030262e;
+}
+.home-active-ride > span {
+  flex: 1;
+  min-width: 0;
 }
 .home-active-ride small,
 .home-active-ride strong {
   display: block;
+  color: #fff;
 }
 .home-active-ride small {
-  color: #bbb;
+  color: #c8c8c4;
   font-size: 10px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-active-ride svg {
+  flex: none;
+  color: var(--yellow);
 }
 .detail-live-map {
   height: 220px;

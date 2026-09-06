@@ -25,6 +25,15 @@ export function RideOfferSheet() {
   if (!ride?.offerId) return null;
   const progress = Math.min(100, (remaining / OFFER_SECONDS) * 100);
   const pickupEta = ride.pickupEtaSeconds ? Math.max(1, Math.round(ride.pickupEtaSeconds / 60)) : null;
+  const passengerRating = Number(ride.passengerRating ?? 5);
+  const fare = Number(ride.estimatedFare ?? 0);
+  const distanceKm = ((ride.pickupDistanceMeters ?? ride.distanceMeters ?? 0) / 1000).toFixed(1);
+  const durationMin = Math.max(1, Math.round((ride.durationSeconds ?? 0) / 60));
+
+  async function onAccept() {
+    const ok = await acceptOffer();
+    if (ok) navigate("/ride");
+  }
 
   return (
     <div className="offer-overlay" role="dialog" aria-modal="true" aria-label="Yeni yolculuk isteği">
@@ -44,7 +53,7 @@ export function RideOfferSheet() {
           <span>
             <strong>{ride.passengerName ?? "Hey Taksi yolcusu"}</strong>
             <small>
-              <Star size={12} /> {ride.passengerRating.toFixed(1)} yolcu puanı
+              <Star size={12} /> {passengerRating.toFixed(1)} yolcu puanı
             </small>
           </span>
           <em>{ride.vehicleType === "standard" ? "Standart" : ride.vehicleType === "comfort" ? "Comfort" : ride.vehicleType === "xl" ? "XL" : "Erişilebilir"}</em>
@@ -70,26 +79,26 @@ export function RideOfferSheet() {
             <small>{pickupEta ? "Alışa uzaklık" : "Mesafe"}</small>
             <strong>
               {pickupEta
-                ? `${pickupEta} dk · ${((ride.pickupDistanceMeters ?? 0) / 1000).toFixed(1)} km`
-                : `${(ride.distanceMeters / 1000).toFixed(1)} km`}
+                ? `${pickupEta} dk · ${distanceKm} km`
+                : `${((ride.distanceMeters ?? 0) / 1000).toFixed(1)} km`}
             </strong>
           </div>
           <div>
             <small>Tahmini süre</small>
-            <strong>{Math.max(1, Math.round(ride.durationSeconds / 60))} dk</strong>
+            <strong>{durationMin} dk</strong>
           </div>
           <div className="earn">
             <small>Tahmini kazanç</small>
-            <strong>₺{ride.estimatedFare.toFixed(2)}</strong>
+            <strong>₺{fare.toFixed(2)}</strong>
           </div>
         </div>
         {error && <div className="driver-error">{error}</div>}
         <div className="offer-actions">
-          <button className="reject" onClick={() => void rejectOffer()} disabled={busy}>
+          <button type="button" className="reject" onClick={() => void rejectOffer()} disabled={busy}>
             <X size={18} /> Reddet
           </button>
-          <button className="accept" onClick={() => void acceptOffer().then((ok) => { if (ok) navigate("/ride"); })} disabled={busy}>
-            <Check size={18} /> Kabul et
+          <button type="button" className="accept" onClick={() => void onAccept()} disabled={busy}>
+            <Check size={18} /> {busy ? "Kabul ediliyor…" : "Kabul et"}
           </button>
         </div>
         <p className="offer-note">

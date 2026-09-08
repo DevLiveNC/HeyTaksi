@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { isVercelRuntime, shouldServeApiDocs } from './runtime.js';
+import { isVercelRuntime, shouldConnectRedis, shouldRunDispatchTimer, shouldServeApiDocs } from './runtime.js';
 
 const appSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../app.ts'), 'utf8');
 
@@ -17,6 +17,14 @@ describe('runtime flags', () => {
   it('gates swagger-ui behind shouldServeApiDocs in the API app', () => {
     expect(appSource).toContain('shouldServeApiDocs()');
     expect(appSource).toContain("pluginTimeout: isVercelRuntime() ? 25_000 : 10_000");
+  });
+
+  it('skips localhost Redis and the dispatch timer on Vercel', () => {
+    expect(shouldConnectRedis({}, 'redis://localhost:6379')).toBe(true);
+    expect(shouldConnectRedis({ VERCEL: '1' }, 'redis://localhost:6379')).toBe(false);
+    expect(shouldConnectRedis({ VERCEL: '1' }, 'rediss://default@redis.upstash.io:6379')).toBe(true);
+    expect(shouldRunDispatchTimer({})).toBe(true);
+    expect(shouldRunDispatchTimer({ VERCEL: '1' })).toBe(false);
   });
 });
 

@@ -33,7 +33,11 @@ const schema = z.object({
   API_PREFIX: z.string().startsWith('/').default('/api/v1'),
   DATABASE_URL: z.string().min(1).default('postgresql://heytaksi:heytaksi@localhost:5432/heytaksi'),
   DATABASE_POOL_MIN: z.coerce.number().int().nonnegative().default(onVercel ? 0 : 2),
-  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(onVercel ? 5 : 20),
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().default(onVercel ? 3 : 20),
+  CRON_SECRET: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   JWT_ACCESS_SECRET: z.string().min(32).default('development-access-secret-change-me'),
   JWT_REFRESH_SECRET: z.string().min(32).default('development-refresh-secret-change-me'),

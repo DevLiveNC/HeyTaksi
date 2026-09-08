@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { spaBuild } from '../spa-vite-build';
 
 process.env.VITE_MAP_PROVIDER ??= 'osm';
 process.env.VITE_MAP_STYLE_URL ??= 'https://tiles.openfreemap.org/styles/liberty';
@@ -7,6 +8,7 @@ process.env.VITE_MAP_STYLE_URL ??= 'https://tiles.openfreemap.org/styles/liberty
 export default defineConfig({
   plugins: [react()],
   worker: { format: 'es' },
+  build: spaBuild,
   server: {
     host: '0.0.0.0',
     allowedHosts: true,

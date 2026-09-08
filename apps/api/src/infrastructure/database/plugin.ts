@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import pg from 'pg';
 import { env } from '../../config/env.js';
+import { isVercelRuntime } from '../../config/runtime.js';
 
 const { Pool } = pg;
 
@@ -10,11 +11,16 @@ export const databasePlugin = fp(async (app) => {
     connectionString: env.DATABASE_URL,
     min: env.DATABASE_POOL_MIN,
     max: env.DATABASE_POOL_MAX,
-    idleTimeoutMillis: 30_000,
+    idleTimeoutMillis: isVercelRuntime() ? 10_000 : 30_000,
     connectionTimeoutMillis: 5_000,
+    allowExitOnIdle: isVercelRuntime(),
     ssl: neon ? { rejectUnauthorized: true } : undefined,
   });
   pool.on('error', (error) => app.log.error({ err: error }, 'PostgreSQL pool hatası'));
+  if (isVercelRuntime()) {
+    const { attachDatabasePool } = await import('@vercel/functions');
+    attachDatabasePool(pool);
+  }
   app.decorate('db', pool);
   app.addHook('onClose', async () => pool.end());
 }, { name: 'database' });

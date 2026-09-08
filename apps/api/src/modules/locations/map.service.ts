@@ -15,6 +15,7 @@ import {
 } from "@heytaksi/shared";
 import { env } from "../../config/env.js";
 import { AppError } from "../../core/errors/app-error.js";
+import { TtlCache } from "../../core/http/ttl-cache.js";
 import { decodeGooglePolyline } from "./google-polyline.js";
 import {
   NOMINATIM_HEADERS,
@@ -87,6 +88,14 @@ function googleKey(): string | undefined {
   return env.GOOGLE_MAPS_API_KEY;
 }
 
+const searchCache = new TtlCache<LocationSearchHit[]>(45_000);
+const reverseCache = new TtlCache<{ latitude: number; longitude: number; address: string }>(60_000);
+const routeCache = new TtlCache<RouteEstimate>(30_000);
+
+function roundCoord(value: number) {
+  return value.toFixed(4);
+}
+
 function kktcGoogleBoundsParam(): string {
   const box = KKTC_MAP_MAX_BOUNDS;
   return `${box.minLatitude},${box.minLongitude}|${box.maxLatitude},${box.maxLongitude}`;
@@ -117,45 +126,69 @@ export class MapService {
   }
 
   async search(query: string, near?: { latitude: number; longitude: number }) {
+    const cacheKey = `s:${env.MAP_PROVIDER}:${query.trim().toLowerCase()}:${near ? `${roundCoord(near.latitude)},${roundCoord(near.longitude)}` : ""}`;
+    const cached = searchCache.get(cacheKey);
+    if (cached) return cached;
     const catalog = catalogHits(query);
+    let result: LocationSearchHit[];
     if (env.MAP_PROVIDER === "google" && googleKey()) {
       try {
-        return mergeSearchHits(catalog, await this.googleSearch(query, near), near);
+        result = mergeSearchHits(catalog, await this.googleSearch(query), near);
+        searchCache.set(cacheKey, result);
+        return result;
       } catch (error) {
         if (!env.MAP_FALLBACK || error instanceof AppError) throw error;
       }
     }
-    return mergeSearchHits(catalog, await this.nominatimSearch(query, near), near);
+    result = mergeSearchHits(catalog, await this.nominatimSearch(query, near), near);
+    searchCache.set(cacheKey, result);
+    return result;
   }
 
   async reverse(latitude: number, longitude: number) {
     assertServiceArea({ latitude, longitude });
+    const cacheKey = `r:${env.MAP_PROVIDER}:${roundCoord(latitude)},${roundCoord(longitude)}`;
+    const cached = reverseCache.get(cacheKey);
+    if (cached) return cached;
+    let result: { latitude: number; longitude: number; address: string };
     if (env.MAP_PROVIDER === "google" && googleKey()) {
       try {
-        return await this.googleReverse(latitude, longitude);
+        result = await this.googleReverse(latitude, longitude);
+        reverseCache.set(cacheKey, result);
+        return result;
       } catch (error) {
         if (!env.MAP_FALLBACK || error instanceof AppError) throw error;
       }
     }
-    return this.nominatimReverse(latitude, longitude);
+    result = await this.nominatimReverse(latitude, longitude);
+    reverseCache.set(cacheKey, result);
+    return result;
   }
 
   async route(pickup: Coordinate, destination: Coordinate): Promise<RouteEstimate> {
     assertServiceArea(pickup);
     assertServiceArea(destination);
+    const cacheKey = `t:${env.MAP_PROVIDER}:${roundCoord(pickup.latitude)},${roundCoord(pickup.longitude)}:${roundCoord(destination.latitude)},${roundCoord(destination.longitude)}`;
+    const cached = routeCache.get(cacheKey);
+    if (cached) return cached;
+    let result: RouteEstimate;
     if (env.MAP_PROVIDER === "google" && googleKey()) {
       try {
-        return await this.googleRoute(pickup, destination);
+        result = await this.googleRoute(pickup, destination);
+        routeCache.set(cacheKey, result);
+        return result;
       } catch (error) {
         if (!env.MAP_FALLBACK || error instanceof AppError) throw error;
       }
     }
-    return this.osrmRoute(pickup, destination);
+    result = await this.osrmRoute(pickup, destination);
+    routeCache.set(cacheKey, result);
+    return result;
   }
 
   /* ------------------------------ Google -------------------------------- */
 
-  private async googleSearch(query: string, _near?: { latitude: number; longitude: number }) {
+  private async googleSearch(query: string) {
     const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
     url.searchParams.set("address", query);
     url.searchParams.set("language", "tr");

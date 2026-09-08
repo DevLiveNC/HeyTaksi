@@ -96,7 +96,7 @@ export default async function handler(request, response) {
       init.body = raw;
       init.duplex = 'half';
     }
-    const upstream = await fetch(`${apiOrigin}${publicApiUrl(request)}`, init);
+    const upstream = await fetch(`${apiOrigin}${publicApiUrl(request)}`, { ...init, signal: AbortSignal.timeout(20_000) });
     response.statusCode = upstream.status;
     for (const [key, value] of Object.entries(corsHeaders(origin))) response.setHeader(key, value);
     upstream.headers.forEach((value, key) => {

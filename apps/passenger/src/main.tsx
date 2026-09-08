@@ -2,16 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider, ErrorBoundary, bootstrapNativeRuntime } from '@heytaksi/ui';
-import { setWorkerUrl } from 'maplibre-gl';
-import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { App } from './routes/App';
 import { apiBaseUrl } from './services/config';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/global.css';
 import './styles/phase3.css';
-
-// MapLibre v6: Vite üretim derlemesinde vektör karoları (sokak, parsel, etiket) worker'sız yüklenmez.
-setWorkerUrl(mapLibreWorkerUrl);
 
 /** Yerel test: `?mockGeo=1` Lefkoşa GPS’i verir (`lat` / `lng` ile değiştirilebilir). */
 function installDevGeoMock() {

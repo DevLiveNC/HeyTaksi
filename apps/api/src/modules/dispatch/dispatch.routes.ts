@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { FastifyPluginAsync } from 'fastify';
+import { isVercelCronRequest } from '../../core/http/cron-auth.js';
 import { validate } from '../../core/http/validation.js';
 
 const rideParams = z.object({ rideId: z.uuid() });
@@ -49,5 +50,14 @@ export const dispatchRoutes: FastifyPluginAsync = async (app) => {
     const { rideId } = validate(rideParams, request.params);
     await app.dispatch.cancel(rideId, 'dispatch_restart');
     return { success: true, data: await app.dispatch.start(rideId) };
+  });
+
+  // Vercel Cron: Functions idle iken setInterval çalışmaz; teklif süreleri burada kapanır.
+  app.get('/tick', { config: { rateLimit: { max: 12, timeWindow: '1 minute' } } }, async (request, reply) => {
+    if (!isVercelCronRequest(request.headers, process.env.CRON_SECRET)) {
+      return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Cron yetkisi gerekli.' } });
+    }
+    await app.dispatch.sweep();
+    return { success: true, data: { swept: true } };
   });
 };
